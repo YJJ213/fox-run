@@ -494,13 +494,14 @@ let distToCoin = 500;       // 还要跑多远生成下一串金币
 let invulnUntil = 0;        // 撞到障碍后的短暂无敌截止时刻（防止同一块石头每帧都扣分）
 
 /* —— 道具系统 —— */
-const POWER_DUR  = { dash: 4, giant: 7, magnet: 9, coinx2: 8 };   // 各道具的基础持续秒数
+const POWER_DUR  = { dash: 4, giant: 7, magnet: 9, coinx2: 8, fly: 6 };   // 各道具的基础持续秒数
 const POWER_INFO = {
   dash:   { name: '冲刺', color: '#ffd34d' },   // 高速狂奔，撞碎一切，顺带吸金币
   giant:  { name: '变大', color: '#c77dff' },   // 巨大化，横着撞碎障碍
   magnet: { name: '磁铁', color: '#ff6b6b' },   // 附近的金币自动飞过来
   coinx2: { name: '双倍金币', color: '#5ce1e6' },   // 期间每枚金币算两枚
   shield: { name: '护盾', color: '#8ecaff' },   // 挡下一次撞击（不占道具栏）
+  fly:    { name: '飞行', color: '#ffa7e2' },   // 飞上天巡航：无敌 + 自带磁吸
 };
 const power = { type: null, until: 0, total: 1 };   // 当前生效的道具
 const items = [];                                   // 场上漂浮的道具
@@ -508,7 +509,7 @@ let distToItem = 2200;      // 还要跑多远出现下一个道具
 
 /* —— v2.0 新系统 —— */
 let bonusUntil = 0;         // 超级奖励时间的截止时刻（吃金币攒出来的福利关）
-let nextBonusAt = 40;       // 本局再吃到多少枚金币就进奖励关
+let nextBonusAt = 100;      // 本局再吃到多少枚金币就进奖励关
 let reviveCount = 0;        // 本局已复活次数（复活费一次比一次贵：200、400、600……）
 let shieldOn = false;       // 护盾道具：挡一次撞击
 let petPulseAt = 0, petPulseUntil = 0;   // 精灵·星宝的吸金币脉冲计时
@@ -592,7 +593,7 @@ function pressJump(source){
   // 空中连跳：角色还有剩余跳跃段数时，在空中按跳跃就直接再跳一次
   const ch = CHARS[save.char] || CHARS.fox;
   const maxJumps = ch.jumps + (save.mount ? 1 : 0);   // 坐骑·筋斗云：所有角色额外 +1 段跳
-  if(!player.grounded && bgTime - player.lastGrounded > COYOTE && player.jumpsUsed < maxJumps &&
+  if(!player.grounded && power.type !== 'fly' && bgTime - player.lastGrounded > COYOTE && player.jumpsUsed < maxJumps &&
      player.y < GROUND_Y + 26){   // 掉坑太深就救不回来了
     airJump();
     return;
@@ -672,7 +673,7 @@ function startGame(){
   jumpHeld = null;
   face.until = 0;
   game.startBest = game.best; game.recordShown = false;
-  bonusUntil = 0; nextBonusAt = 40; reviveCount = 0; shieldOn = false;
+  bonusUntil = 0; nextBonusAt = 100; reviveCount = 0; shieldOn = false;
   bunny = null; distToBunny = 6000 + Math.random() * 4000;
   banner.until = 0; petPulseAt = 0; petPulseUntil = 0;
   resetPlayer();
@@ -715,7 +716,7 @@ function saveBest(){
 // 超级奖励时间：清空一切危险，金币铺天盖地下 6 秒
 function startBonus(){
   bonusUntil = bgTime + 6;
-  nextBonusAt = game.coinCount + 40;   // 下次门槛从"当前数量"重新起算，奖励关永远不会连环触发
+  nextBonusAt = game.coinCount + 100;  // 下次门槛从"当前数量"重新起算，奖励关永远不会连环触发
   obstacles.length = 0;
   pits.length = 0;
   showBanner('✨ 超级奖励时间 ✨', 2.5, '#ffd34d');
@@ -894,7 +895,7 @@ function spawnItem(){
   for(const o of obstacles){
     if((o.alt || o.type === 'pendulum') && o.x > W - 420){ distToItem = 250; return; }
   }
-  const types = ['dash', 'giant', 'magnet', 'coinx2', 'shield'];
+  const types = ['dash', 'giant', 'magnet', 'coinx2', 'shield', 'fly'];
   items.push({
     x: W + 60,
     y: rand(140, 170),   // 和金币同一条安全线：永远悬在最高障碍之上，不"诱人送死"
@@ -939,7 +940,7 @@ function update(dt){
   // —— 下面是游戏进行中 ——
   if(power.type && bgTime > power.until){
     // 冲刺/变大结束的瞬间给 0.6 秒缓冲无敌：免得"差一帧就能撞碎"的障碍贴脸把你绊倒
-    if(power.type === 'dash' || power.type === 'giant'){
+    if(power.type === 'dash' || power.type === 'giant' || power.type === 'fly'){
       invulnUntil = Math.max(invulnUntil, bgTime + 0.6);
     }
     power.type = null;   // 道具到点失效
@@ -996,7 +997,9 @@ function update(dt){
 
   // 撞障碍判定（碰撞框比画面上看到的略小，对玩家宽容一点，手感更公平）
   const pb = { x: player.x + 7, y: player.y - player.h + 6, w: player.w - 14, h: player.h - 8 };
-  if(power.type === 'dash' || power.type === 'giant'){
+  if(power.type === 'fly'){
+    // 飞行中：在天上巡航，啥也撞不着
+  } else if(power.type === 'dash' || power.type === 'giant'){
     // 冲刺/变大期间：碰到障碍直接撞碎，每个 +2 分（判定框放大 8px，撞起来更爽）
     for(let i = obstacles.length - 1; i >= 0; i--){
       const o = obstacles[i];
@@ -1093,7 +1096,7 @@ function update(dt){
   }
 
   // 磁铁（冲刺也自带吸金币，精灵的脉冲也走这里）：附近的金币自动飞过来
-  if(power.type === 'magnet' || power.type === 'dash' || bgTime < petPulseUntil){
+  if(power.type === 'magnet' || power.type === 'dash' || power.type === 'fly' || bgTime < petPulseUntil){
     const mcx = player.x + player.w / 2, mcy = player.y - player.h / 2;
     for(const c of coins){
       const dx = mcx - c.x, dy = mcy - c.y;
@@ -1103,6 +1106,13 @@ function update(dt){
         c.y += dy / dd * 520 * dt;
       }
     }
+  }
+
+  // 飞行时的粉白星光拖尾
+  if(power.type === 'fly'){
+    particles.push({ x: player.x - 4, y: player.y - rand(6, player.h),
+      vx: -rand(200, 320), vy: rand(-30, 30), life: 0, max: rand(0.2, 0.45),
+      size: rand(2, 4), color: Math.random() < 0.5 ? '#ffa7e2' : '#ffffff', grav: 0 });
   }
 
   // 冲刺时的金色拖尾
@@ -1154,6 +1164,18 @@ function update(dt){
 
 function updatePlayer(dt){
   const p = player;
+
+  if(power.type === 'fly'){
+    // —— 飞行道具：自动巡航在金币带的高度，轻轻上下浮动 ——
+    p.grounded = false; p.gliding = false; p.inPit = false;
+    p.jumpsUsed = 0;                                   // 飞行结束后可以满状态连跳
+    const targetY = 150 + Math.sin(bgTime * 3) * 12;
+    p.y += (targetY - p.y) * Math.min(1, dt * 4);
+    p.vy = 0;
+    p.phase += dt * 14;                                // 小腿快乐地划拉
+    tickPlayerCosmetics(dt);
+    return;
+  }
 
   // 起跳判定：跳跃缓冲 + 土狼时间，让操作判定更宽容（很多名作都这么做）
   const canJump = p.grounded || (bgTime - p.lastGrounded <= COYOTE && p.vy >= 0);
@@ -1462,6 +1484,12 @@ function drawItems(){
       ctx.font = 'bold 11px ' + FONT;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('×2', 7, 1);
+    } else if(it.type === 'fly'){
+      ctx.fillStyle = col;   // 一对小翅膀
+      ctx.beginPath(); ctx.ellipse(-5, 0, 8, 4, -0.5, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(5, 0, 8, 4, 0.5, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(0, 1, 3, 0, TAU); ctx.fill();
     } else {
       ctx.fillStyle = col;   // 护盾
       ctx.beginPath();
@@ -1537,6 +1565,18 @@ function drawPlayer(){
     ctx.ellipse(p.x + p.w / 2 - 16, p.y + 5, 14, 6, 0, 0, TAU);
     ctx.ellipse(p.x + p.w / 2 + 16, p.y + 5, 14, 6, 0, 0, TAU);
     ctx.fill();
+  }
+  // 飞行道具：背后一对快速扇动的小翅膀
+  if(power.type === 'fly'){
+    const flapW = Math.sin(bgTime * 22) * 0.5;
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.save();
+    ctx.translate(p.x + 8, p.y - p.h + 6);
+    ctx.rotate(-0.4 + flapW);
+    ctx.beginPath(); ctx.ellipse(-12, 0, 16, 6, 0, 0, TAU); ctx.fill();
+    ctx.rotate(0.8 - flapW * 2);
+    ctx.beginPath(); ctx.ellipse(-12, 0, 13, 5, 0, 0, TAU); ctx.fill();
+    ctx.restore();
   }
   ctx.save();
   // 刚撞到障碍的短暂无敌期：闪烁提示
@@ -2180,21 +2220,45 @@ document.getElementById('avatarFile').addEventListener('change', e => {
   reader.onload = () => {
     const img = new Image();
     img.onload = () => {
-      const cv2 = document.createElement('canvas');
-      cv2.width = cv2.height = 128;
-      const c2 = cv2.getContext('2d');
-      const s = Math.min(img.width, img.height);   // 居中裁出正方形
-      c2.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 128, 128);
-      save.avatar = cv2.toDataURL('image/jpeg', 0.85);
-      save.useAvatar = true;
-      loadAvatarImg();
-      saveSave();
-      renderShop();
-      // 如果是"创建主角"弹窗发起的上传：关弹窗、直接开局
-      if(avatarAskOpen()){
-        avatarAskEl.classList.add('hidden');
-        if(startAfterAvatar){ startAfterAvatar = false; startGame(); }
-      }
+      // 把选定的正方形区域裁成 128×128 存进存档
+      const finish = (sx, sy, s) => {
+        const cv2 = document.createElement('canvas');
+        cv2.width = cv2.height = 128;
+        const c2 = cv2.getContext('2d');
+        c2.drawImage(img, sx, sy, s, s, 0, 0, 128, 128);
+        save.avatar = cv2.toDataURL('image/jpeg', 0.85);
+        save.useAvatar = true;
+        loadAvatarImg();
+        saveSave();
+        renderShop();
+        // 如果是"创建主角"弹窗发起的上传：关弹窗、直接开局
+        if(avatarAskOpen()){
+          avatarAskEl.classList.add('hidden');
+          if(startAfterAvatar){ startAfterAvatar = false; startGame(); }
+        }
+      };
+      // 兜底裁法：水平居中、垂直偏上——人像照片的脸通常在偏上 1/3 的位置
+      const fallback = () => {
+        const s = Math.min(img.width, img.height);
+        const sx = (img.width - s) / 2;
+        const sy = Math.max(0, Math.min(img.height - s, img.height * 0.38 - s / 2));
+        finish(sx, sy, s);
+      };
+      // 部分浏览器自带人脸检测（FaceDetector）：检测到脸就把镜头精确对准脸
+      if(window.FaceDetector){
+        try{
+          new FaceDetector({ maxDetectedFaces: 1, fastMode: true }).detect(img).then(faces => {
+            if(faces && faces.length){
+              const fb = faces[0].boundingBox;
+              const fcx = fb.x + fb.width / 2, fcy = fb.y + fb.height / 2;
+              const s = Math.min(Math.max(fb.width, fb.height) * 1.7, img.width, img.height);
+              const sx = Math.max(0, Math.min(img.width - s, fcx - s / 2));
+              const sy = Math.max(0, Math.min(img.height - s, fcy - s / 2));
+              finish(sx, sy, s);
+            } else fallback();
+          }).catch(fallback);
+        }catch(e){ fallback(); }
+      } else fallback();
     };
     img.src = reader.result;
   };
