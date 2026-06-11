@@ -737,6 +737,11 @@ function mulberry32(seed){
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+// 冲刺倍速：开局冲刺(花钱买的)比普通冲刺道具更快，更有"开局起飞"的爽感
+function dashMult(){
+  if(power.type !== 'dash') return 1;
+  return boostDist > 0 && game.runDist < boostDist ? 2.2 : 1.8;
+}
 let seededRng = Math.random;
 function srand(){ return dailyMode ? seededRng() : Math.random(); }   // 生成赛道内容专用的随机数
 function srange(a, b){ return a + srand() * (b - a); }
@@ -1312,7 +1317,7 @@ function spawnObstacle(){
   }
   // 段落结束：到下一段的间距用原公式（含密度递增）
   const densK = Math.max(0.65, 1 - d / 9000);
-  distToObstacle = (game.speed * (power.type === 'dash' ? 1.8 : 1) * 0.6 + 280 + srand() * 320) * densK;
+  distToObstacle = (game.speed * dashMult() * 0.6 + 280 + srand() * 320) * densK;
 }
 function spawnCoins(){
   // 屏幕右侧附近有鸟或摆锤时先不发金币，过 250px 再试（理由见 spawnObstacle 里的注释）
@@ -1493,7 +1498,7 @@ function update(dt){
 
   game.speed = Math.min(SPEED_MAX, game.speed + SPEED_RAMP * dt);
   // 冲刺道具生效时世界加速 1.8 倍（相对地，就是狐狸在狂奔）
-  const move = game.speed * (power.type === 'dash' ? 1.8 : 1) * dt;
+  const move = game.speed * dashMult() * dt;
   game.dist += move; game.runDist += move;
 
   const inBonus = bgTime < bonusUntil;   // 超级奖励时间：没有任何危险，只有漫天金币
@@ -1686,11 +1691,14 @@ function update(dt){
       size: rand(2, 4), color: Math.random() < 0.5 ? '#ffa7e2' : '#ffffff', grav: 0 });
   }
 
-  // 冲刺时的金色拖尾
+  // 冲刺时的金色拖尾（开局冲刺期间喷得更猛）
   if(power.type === 'dash'){
-    particles.push({ x: player.x + rand(-6, 10), y: player.y - rand(4, player.h),
-      vx: -rand(380, 520), vy: rand(-20, 20), life: 0, max: rand(0.15, 0.3),
-      size: rand(2, 5), color: Math.random() < 0.5 ? '#ffd34d' : '#fff6d8', grav: 0 });
+    const trailN = (boostDist > 0 && game.runDist < boostDist) ? 3 : 1;
+    for(let ti = 0; ti < trailN; ti++){
+      particles.push({ x: player.x + rand(-6, 10), y: player.y - rand(4, player.h),
+        vx: -rand(380, 560), vy: rand(-25, 25), life: 0, max: rand(0.15, 0.32),
+        size: rand(2, 5), color: Math.random() < 0.5 ? '#ffd34d' : '#fff6d8', grav: 0 });
+    }
   }
 
   // 吃金币（圆和矩形的碰撞判定）
@@ -1804,7 +1812,7 @@ function updatePlayer(dt){
       // 正在坑里下坠：跟着世界一起往左滑，看起来就是掉进了洞里。
       // 标记"已坠坑"——就算坑随后滑出屏幕被清理掉，也不能凭空落地（之前的 bug）
       p.inPit = true;
-      p.x -= game.speed * (power.type === 'dash' ? 1.8 : 1) * dt;
+      p.x -= game.speed * dashMult() * dt;
       if(p.y > H + 30 || p.x + p.w < 0){ die('pit'); return; }   // 掉出屏幕或滑出左边界，这局结束
     }
   } else {
@@ -2647,6 +2655,11 @@ function drawHUD(){
   ctx.textAlign = 'center';
   hudText(dailyMode ? '☀️ ' + Math.min(3000, Math.floor(game.runDist / 12)) + ' / 3000 米'
                     : '最高 ' + game.best, W / 2, 14);
+  if(boostDist > 0 && game.runDist < boostDist && game.state === 'playing'){
+    ctx.font = 'bold 16px ' + FONT;
+    ctx.fillStyle = '#ffd34d';
+    hudText('🚀 开局冲刺 · 还剩 ' + Math.max(0, Math.ceil((boostDist - game.runDist) / 12)) + ' 米', W / 2, 36);
+  }
   // 中央大横幅（破纪录 / 奖励关 / 复活 / 抓到兔子）
   if(bgTime < banner.until){
     ctx.globalAlpha = Math.min(1, (banner.until - bgTime) / 0.4);
@@ -3076,9 +3089,12 @@ function renderHome(){
     hb.innerHTML = bh;
   }
 }
+let lastBoostAt = 0;   // 手机上手抖双击会"选中又立刻取消"，350ms 内只认第一下
 document.getElementById('homeBoosts').addEventListener('click', e => {
   const b = e.target.closest('button');
   if(!b) return;
+  if(performance.now() - lastBoostAt < 350) return;
+  lastBoostAt = performance.now();
   const cost = parseInt(b.dataset.cost);
   if(b.dataset.boost === 'shield'){
     if(pendingShield){ pendingShield = false; save.coins += cost; }                 // 取消=退款
