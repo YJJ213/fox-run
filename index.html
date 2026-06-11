@@ -124,6 +124,13 @@
   .chip-g{ background: #9b59d0; }
   #shopCard h2{ margin: 0 0 4px; font-size: 20px; display: flex; justify-content: space-between; align-items: center; }
   #shopCard h2 span{ font-size: 15px; color: #ffd34d; }
+  #shopTabs{ display: flex; gap: 8px; margin: 10px 0 4px; }
+  #shopTabs button{
+    flex: 1; border: none; border-radius: 8px; padding: 9px;
+    background: rgba(255,255,255,.10); color: #97a1b8; font-size: 14px; cursor: pointer;
+  }
+  #shopTabs button.active{ background: #ffd34d; color: #4a3500; font-weight: bold; }
+  #tabGem.active{ background: #23bcc9; color: #04353a; }
   .shop-row{
     display: flex; justify-content: space-between; align-items: center; gap: 10px;
     padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.08);
@@ -162,6 +169,10 @@
 <div id="shop" class="hidden">
   <div id="shopCard">
     <h2>🛒 商店 <span id="shopCoins"></span></h2>
+    <div id="shopTabs">
+      <button id="tabCoin" class="active">💰 金币商店</button>
+      <button id="tabGem">💎 钻石商店</button>
+    </div>
     <div id="shopList"></div>
     <button id="shopClose">关 闭</button>
     <input type="file" id="avatarFile" accept="image/*" hidden>
@@ -498,7 +509,7 @@ let distToItem = 2200;      // 还要跑多远出现下一个道具
 /* —— v2.0 新系统 —— */
 let bonusUntil = 0;         // 超级奖励时间的截止时刻（吃金币攒出来的福利关）
 let nextBonusAt = 40;       // 本局再吃到多少枚金币就进奖励关
-let reviveCount = 0;        // 本局已复活次数（复活费用次次翻倍）
+let reviveCount = 0;        // 本局已复活次数（复活费一次比一次贵：200、400、600……）
 let shieldOn = false;       // 护盾道具：挡一次撞击
 let petPulseAt = 0, petPulseUntil = 0;   // 精灵·星宝的吸金币脉冲计时
 let bunny = null;           // 钻石兔（场上最多一只）
@@ -571,8 +582,10 @@ function pressJump(source){
     startGame(); return;
   }
   if(game.state === 'dead'){
-    // 死后停 0.45 秒才接受重开，防止手里的按键把结算画面"按穿"
-    if(bgTime - game.deadAt > 0.45) startGame();
+    // 死后稍等才接受重开，防止按键把结算画面"按穿"；
+    // 如果复活按钮亮着，多等一会儿，免得手快误点屏幕错过复活机会
+    const canRevive = save.coins >= 200 * (reviveCount + 1);
+    if(bgTime - game.deadAt > (canRevive ? 1.5 : 0.45)) startGame();
     return;
   }
   jumpHeld = source;
@@ -601,7 +614,13 @@ function releaseJump(source){
   if(game.state === 'playing' && player.vy < JUMP_CUT) player.vy = JUMP_CUT;
 }
 window.addEventListener('keydown', e => {
-  if(avatarAskOpen()) return;   // "创建主角"弹窗开着时，键盘交给弹窗
+  if(avatarAskOpen()){   // "创建主角"弹窗开着时：ESC 可以暂时关掉（下次还会再问）
+    if(e.code === 'Escape'){
+      avatarAskEl.classList.add('hidden');
+      if(startAfterAvatar){ startAfterAvatar = false; startGame(); }
+    }
+    return;
+  }
   if(shopOpen()){   // 商店开着时，键盘只负责关商店
     if(e.code === 'Escape' || e.code === 'KeyB') toggleShop(false);
     return;
@@ -667,9 +686,8 @@ function die(cause){
   stopBGM();   // 背景音乐停下，让"游戏结束"旋律独奏
   sfx.die();
   burst(player.x + player.w/2, Math.min(player.y - player.h/2, H - 20), 26, ['#ff9b4b','#ffd34d','#ffffff']);
-  if(game.score > game.best){
-    game.best = game.score; game.newBest = true;
-  }
+  // 和"本局开始时的纪录"比，而不是和实时刷新的 best 比（best 永远 >= score，那样永远判不出新纪录）
+  if(game.score > game.startBest) game.newBest = true;
   saveBest();
 }
 // 休闲模式下撞到障碍：绊一下——扣 20 分、震屏、短暂无敌闪烁，但游戏继续
@@ -697,6 +715,7 @@ function saveBest(){
 // 超级奖励时间：清空一切危险，金币铺天盖地下 6 秒
 function startBonus(){
   bonusUntil = bgTime + 6;
+  nextBonusAt = game.coinCount + 40;   // 下次门槛从"当前数量"重新起算，奖励关永远不会连环触发
   obstacles.length = 0;
   pits.length = 0;
   showBanner('✨ 超级奖励时间 ✨', 2.5, '#ffd34d');
@@ -796,11 +815,21 @@ function spawnObstacle(){
       if(Math.abs(coins[i].x - o.x) < 260) coins.splice(i, 1);
     }
   }
+  // 摆锤的摆程会扫到金币/道具的高度带：把附近已有的金币和道具清掉，别诱人送死
+  if(type === 'pendulum'){
+    const px = o.x + 20;
+    for(let i = coins.length - 1; i >= 0; i--){
+      if(Math.abs(coins[i].x - px) < 200) coins.splice(i, 1);
+    }
+    for(let i = items.length - 1; i >= 0; i--){
+      if(Math.abs(items[i].x - px) < 200) items.splice(i, 1);
+    }
+  }
 }
 function spawnCoins(){
-  // 屏幕右侧附近有鸟时先不发金币，过 250px 再试（理由见 spawnObstacle 里的注释）
+  // 屏幕右侧附近有鸟或摆锤时先不发金币，过 250px 再试（理由见 spawnObstacle 里的注释）
   for(const o of obstacles){
-    if(o.alt && o.x > W - 280){ distToCoin = 250; return; }
+    if((o.alt || o.type === 'pendulum') && o.x > W - 420){ distToCoin = 250; return; }
   }
   const n = 3 + Math.floor(Math.random() * 3);    // 一串 3~5 枚
   // 高度上限压在最高障碍（78px）之上：保证任何金币都能安全吃到，不会"诱人送死"
@@ -811,6 +840,20 @@ function spawnCoins(){
       x: W + 60 + i * 34,
       y: baseY - Math.sin(t * Math.PI) * arc,     // 排成一道小弧线
       phase: Math.random() * TAU,
+    });
+  }
+}
+// 超级奖励关专属："大头"从天而降（戴着真人头像时下的就是你的脸！），吃一个 +20 表现分
+function spawnBigheads(){
+  const n = 3 + Math.floor(Math.random() * 3);
+  const baseY = rand(120, 185), arc = rand(0, 30);
+  for(let i = 0; i < n; i++){
+    const t = n === 1 ? 0.5 : i / (n - 1);
+    coins.push({
+      x: W + 60 + i * 40,
+      y: baseY - Math.sin(t * Math.PI) * arc,
+      phase: Math.random() * TAU,
+      star: true,   // star=true 表示这是"大头"而不是金币
     });
   }
 }
@@ -847,6 +890,10 @@ function overPit(){
   return false;
 }
 function spawnItem(){
+  // 和金币一样：右侧有鸟/摆锤时先不出道具，免得诱人撞上去
+  for(const o of obstacles){
+    if((o.alt || o.type === 'pendulum') && o.x > W - 420){ distToItem = 250; return; }
+  }
   const types = ['dash', 'giant', 'magnet', 'coinx2', 'shield'];
   items.push({
     x: W + 60,
@@ -914,7 +961,10 @@ function update(dt){
     distToObstacle = (game.speed * (power.type === 'dash' ? 1.8 : 1) * 0.6 + 280 + Math.random() * 320) * densK;
   }
   distToCoin -= move;
-  if(distToCoin <= 0){ spawnCoins(); distToCoin = inBonus ? 130 : 600 + Math.random() * 700; }
+  if(distToCoin <= 0){
+    if(inBonus){ spawnBigheads(); distToCoin = 150; }   // 奖励关下"大头雨"：吃了全是表现分
+    else { spawnCoins(); distToCoin = 600 + Math.random() * 700; }
+  }
 
   // 所有东西向左移动，出了屏幕就清理掉
   for(let i = obstacles.length - 1; i >= 0; i--){
@@ -962,8 +1012,12 @@ function update(dt){
         game.shake = Math.max(game.shake, 5);
         setFace('joy', 0.5);   // 撞碎东西很爽！
         sfx.smash();
-        burst(o.x + o.w / 2, GROUND_Y - (o.alt || 0) - o.h / 2, 14, ['#cfd8c2', '#8fa07e', '#ffffff']);
-        floatText(o.x + o.w / 2, GROUND_Y - (o.alt || 0) - o.h - 12, '+2', '#b8ffb0');
+        // 特效画在被撞碎的东西上（摆锤的锤头悬在空中，位置要单独算）
+        const fb = o.type === 'pendulum' ? pendulumBall(o) : null;
+        const fxX = fb ? fb.x : o.x + o.w / 2;
+        const fxY = fb ? fb.y : GROUND_Y - (o.alt || 0) - o.h / 2;
+        burst(fxX, fxY, 14, ['#cfd8c2', '#8fa07e', '#ffffff']);
+        floatText(fxX, fxY - 18, '+2', '#b8ffb0');
       }
     }
   } else if(bgTime >= invulnUntil){   // 刚撞过的短暂无敌期内，不再重复判定
@@ -1000,6 +1054,7 @@ function update(dt){
     if(distToBunny <= 0){
       bunny = { x: W + 60, mode: 'in', t: 0, base: 0 };
       distToBunny = 9000 + Math.random() * 6000;
+      showBanner('💎 钻石兔出现了！跳起来扑住它', 1.8, '#7df9ff');
     }
   }
   if(bunny){
@@ -1016,8 +1071,10 @@ function update(dt){
       if(bunny.x > W + 120) bunny = null;
     }
     if(bunny){
+      // 必须"扑"才能抓到：在空中下落时压到它才算（站着不动蹭到不算，不然白送）
       const bb = { x: bunny.x - 16, y: GROUND_Y - 30, w: 32, h: 30 };
-      if(pb.x < bb.x + bb.w && pb.x + pb.w > bb.x &&
+      if(!player.grounded && player.vy > 0 &&
+         pb.x < bb.x + bb.w && pb.x + pb.w > bb.x &&
          pb.y < bb.y + bb.h && pb.y + pb.h > bb.y){
         save.gems += 1; saveSave();
         burst(bunny.x, GROUND_Y - 20, 16, ['#7df9ff', '#ffffff']);
@@ -1060,20 +1117,25 @@ function update(dt){
     const c = coins[i];
     const nx = clamp(c.x, pb.x, pb.x + pb.w);
     const ny = clamp(c.y, pb.y, pb.y + pb.h);
-    if((c.x - nx) * (c.x - nx) + (c.y - ny) * (c.y - ny) < 13 * 13){
+    const cr = c.star ? 17 : 13;   // 大头比金币大，判定圈也大些
+    if((c.x - nx) * (c.x - nx) + (c.y - ny) * (c.y - ny) < cr * cr){
       coins.splice(i, 1);
+      if(c.star){   // 奖励关的"大头"：直接加表现分，不算金币（所以不会再连环触发奖励关）
+        game.bonus += 20;
+        sfx.coin();
+        burst(c.x, c.y, 8, ['#ffd34d', '#ffffff']);
+        floatText(c.x, c.y - 16, '+20分', '#ffb3f6');
+        continue;
+      }
       const v = (power.type === 'coinx2') ? 2 : 1;   // 双倍金币道具：一枚顶两枚
       game.coinCount += v;
       save.coins += v;
-      if(game.coinCount % 10 === 0) saveSave();   // 每攒 10 枚顺手存一次档
+      if(game.coinCount % 10 < v) saveSave();   // 大约每 10 枚存一次档（双倍时一次跳 2，用 < v 兜住）
       sfx.coin();
       burst(c.x, c.y, 6, ['#ffd34d', '#fff3b0']);
       floatText(c.x, c.y - 14, '+' + (v * 5) + '分', '#ffd34d');
-      // 本局攒够金币就进超级奖励关！
-      if(game.coinCount >= nextBonusAt){
-        nextBonusAt += 40;
-        startBonus();
-      }
+      // 本局攒够金币就进超级奖励关！（进行中不重复触发）
+      if(bgTime >= bonusUntil && game.coinCount >= nextBonusAt) startBonus();
     }
   }
 
@@ -1420,8 +1482,36 @@ function rock(x, w, h){
   rr(x + 3, GROUND_Y - h + 3, w * 0.4, h * 0.3, 3); ctx.fill();
 }
 
+// "大头"：奖励关的表现分收集物——平时是当前角色的Q版大头，戴了真人头像就是你的脸
+function drawBighead(c0){
+  const r = 13 + Math.sin(bgTime * 5 + c0.phase) * 1.5;
+  const useAv = save.useAvatar && avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0;
+  if(useAv){
+    ctx.save();
+    ctx.beginPath(); ctx.arc(c0.x, c0.y, r, 0, TAU); ctx.clip();
+    ctx.drawImage(avatarImg, c0.x - r, c0.y - r, r * 2, r * 2);
+    ctx.restore();
+    ctx.strokeStyle = '#ffd34d'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(c0.x, c0.y, r, 0, TAU); ctx.stroke();
+    return;
+  }
+  const ch = CHARS[save.char] || CHARS.fox;
+  ctx.fillStyle = ch.c.body;
+  ctx.beginPath(); ctx.arc(c0.x - 7, c0.y - 10, 5, 0, TAU); ctx.fill();   // 两只耳朵
+  ctx.beginPath(); ctx.arc(c0.x + 7, c0.y - 10, 5, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(c0.x, c0.y, r, 0, TAU); ctx.fill();            // 大脸
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(c0.x, c0.y, r, 0, TAU); ctx.stroke();
+  ctx.fillStyle = '#2a1505';                                              // 眼睛
+  ctx.beginPath(); ctx.arc(c0.x - 4, c0.y - 2, 2, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(c0.x + 4, c0.y - 2, 2, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,120,150,0.5)';                                // 腮红
+  ctx.beginPath(); ctx.arc(c0.x - 7, c0.y + 4, 2.5, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(c0.x + 7, c0.y + 4, 2.5, 0, TAU); ctx.fill();
+}
 function drawCoins(){
   for(const c of coins){
+    if(c.star){ drawBighead(c); continue; }
     const spin = Math.abs(Math.cos(bgTime * 5 + c.phase));   // 左右压缩模拟旋转
     ctx.save();
     ctx.translate(c.x, c.y);
@@ -1929,6 +2019,9 @@ function render(){
 const shopEl = document.getElementById('shop');
 const shopList = document.getElementById('shopList');
 const shopCoinsEl = document.getElementById('shopCoins');
+let shopTab = 'coin';   // 当前页签：coin=金币商店 | gem=钻石商店
+document.getElementById('tabCoin').addEventListener('click', () => { shopTab = 'coin'; renderShop(); });
+document.getElementById('tabGem').addEventListener('click', () => { shopTab = 'gem'; renderShop(); });
 // 货架：kind 为 char 的是角色（名字/能力/价格都在 CHARS 里），up 的是可升级项
 const SHOP_GOODS = [
   { id: 'fox',     kind: 'char' },
@@ -1941,7 +2034,10 @@ const SHOP_GOODS = [
 function shopOpen(){ return !shopEl.classList.contains('hidden'); }
 function renderShop(){
   shopCoinsEl.textContent = '💰 ' + save.coins + '　💎 ' + save.gems;
+  document.getElementById('tabCoin').classList.toggle('active', shopTab === 'coin');
+  document.getElementById('tabGem').classList.toggle('active', shopTab === 'gem');
   let html = '';
+  if(shopTab === 'coin'){
   for(const g of SHOP_GOODS){
     let prev, info, btn;
     if(g.kind === 'char'){
@@ -1977,7 +2073,10 @@ function renderShop(){
           (save.useAvatar ? '<span class="chip chip-g">使用中</span>' : '') +
           '<small>上传一张照片，角色的脑袋换成你！撞到、吃道具、阵亡都有专属表情</small></div>' +
           '<div>' + avBtns + '</div></div>';
-  // 钻石专区（💎从追钻石兔获得）
+  } else {
+  // —— 钻石商店：💎 专属高级货，和金币商店完全分开 ——
+  html += '<div class="shop-row"><div class="shop-prev">🐰</div>' +
+          '<div class="grow"><b>怎么获得钻石？</b><small>路上偶尔出现背着钻石的小兔子——跳起来扑住它就 +1 💎（未来会有更多获取方式）</small></div></div>';
   const gemGoods = [
     { id: 'mount', name: '坐骑·筋斗云', desc: '脚踩白云：所有角色额外 +1 段跳！', emoji: '☁️', cost: 8 },
     { id: 'pet',   name: '精灵·星宝',   desc: '飘在身边的小精灵，每 8 秒自动帮你吸一波金币', emoji: '🧚', cost: 5 },
@@ -1990,6 +2089,7 @@ function renderShop(){
             '<div class="grow"><b>' + g2.name + '</b><span class="chip" style="background:#23bcc9">钻石专属</span>' +
             '<small>' + g2.desc + '</small></div>' +
             '<div>' + btn2 + '</div></div>';
+  }
   }
   shopList.innerHTML = html;
   // 记下所有预览画布，主循环会逐帧重画它们 → 货架上的小动物是活的！
