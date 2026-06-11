@@ -1,0 +1,1762 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#161a24">
+<!-- 下面几行让手机"添加到主屏幕"后，像原生 App 一样全屏打开 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="狐狸快跑">
+<title>狐狸快跑 · 我的第一个小游戏</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body{
+    background: #161a24;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    touch-action: manipulation;
+    -webkit-user-select: none; user-select: none;   /* 防止长按/拖动时选中文字 */
+    -webkit-touch-callout: none;                    /* 防止 iOS 长按弹出菜单 */
+  }
+  #wrap{ position: relative; width: min(96vw, 960px); }
+  #game{
+    display: block; width: 100%; border-radius: 14px;
+    box-shadow: 0 12px 48px rgba(0,0,0,.5);
+    touch-action: none;   /* 手机上防止触摸画布时页面跟着滚动 */
+  }
+  #muteBtn{
+    position: absolute; top: 12px; right: 12px; font-size: 17px; line-height: 1;
+    background: rgba(255,255,255,.18); color: #fff; border: none; border-radius: 8px;
+    padding: 6px 9px; cursor: pointer;
+  }
+  #muteBtn:hover{ background: rgba(255,255,255,.3); }
+  #shopBtn{
+    position: absolute; top: 12px; right: 56px; font-size: 17px; line-height: 1;
+    background: rgba(255,255,255,.18); color: #fff; border: none; border-radius: 8px;
+    padding: 6px 9px; cursor: pointer;
+  }
+  #shopBtn:hover{ background: rgba(255,255,255,.3); }
+  #pauseBtn{
+    position: absolute; top: 12px; right: 100px; font-size: 17px; line-height: 1;
+    background: rgba(255,255,255,.18); color: #fff; border: none; border-radius: 8px;
+    padding: 6px 9px; cursor: pointer;
+  }
+  #pauseBtn:hover{ background: rgba(255,255,255,.3); }
+  #tip{ color: #7e879c; font-size: 13px; margin-top: 12px; text-align: center; padding: 0 12px; }
+
+  /* ===== 手机适配 ===== */
+  /* 触屏设备：按钮加大，手指才按得准 */
+  @media (pointer: coarse){
+    #muteBtn{ font-size: 24px; padding: 12px 14px; top: 10px; right: 10px; }
+    #shopBtn{ font-size: 24px; padding: 12px 14px; top: 10px; right: 76px; }
+    #pauseBtn{ font-size: 24px; padding: 12px 14px; top: 10px; right: 142px; }
+    .shop-row button{ padding: 12px 18px; font-size: 15px; }
+    #shopClose{ padding: 14px; font-size: 16px; }
+  }
+  @media (max-width: 920px){
+    body{ overflow: hidden; }   /* 手机上禁止页面被拖来拖去 */
+    #tip{ display: none; }      /* 操作说明游戏里都有，不占屏幕 */
+    #game{ border-radius: 0; }
+  }
+  /* 手机横屏：游戏铺满整个屏幕 */
+  @media (max-width: 920px) and (orientation: landscape){
+    #wrap{ width: 100vw; }
+  }
+  /* 手机竖屏：把整个游戏（和商店）旋转 90°——打开就是满屏大横屏，不用手动转手机 */
+  @media (max-width: 920px) and (orientation: portrait){
+    #wrap, #shop{
+      position: fixed; inset: auto; top: 0; left: 0;
+      width: 100vh; height: 100vw;       /* 宽高互换（老浏览器的回退写法） */
+      width: 100dvh; height: 100dvw;     /* dvh/dvw 会把浏览器工具栏算进去，更准 */
+      transform: rotate(90deg) translateY(-100%);
+      transform-origin: top left;
+      display: flex; align-items: center; justify-content: center;
+    }
+  }
+  /* —— 商店弹窗 —— */
+  #shop{
+    position: fixed; inset: 0; z-index: 10;
+    background: rgba(8,12,24,.65);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #shop.hidden{ display: none; }
+  #shopCard{
+    background: #202737; color: #fff; border-radius: 14px;
+    padding: 18px 20px; width: min(92vw, 460px);
+    max-height: 86vh; overflow-y: auto;
+    box-shadow: 0 16px 60px rgba(0,0,0,.55);
+  }
+  .chip{
+    display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 99px;
+    background: #4f87d6; color: #fff; margin-left: 6px; vertical-align: 2px;
+  }
+  .chip-g{ background: #9b59d0; }
+  #shopCard h2{ margin: 0 0 4px; font-size: 20px; display: flex; justify-content: space-between; align-items: center; }
+  #shopCard h2 span{ font-size: 15px; color: #ffd34d; }
+  .shop-row{
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .shop-row b{ font-size: 15px; }
+  .shop-row small{ display: block; color: #97a1b8; margin-top: 2px; }
+  .shop-row .grow{ flex: 1; }
+  .shop-prev{
+    width: 72px; height: 56px; flex: none;
+    background: rgba(255,255,255,.07); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+  }
+  .shop-prev img{ width: 100%; height: 100%; border-radius: 8px; object-fit: cover; }
+  .shop-row button{
+    border: none; border-radius: 8px; padding: 7px 14px; cursor: pointer;
+    background: #ffd34d; color: #4a3500; font-weight: bold; white-space: nowrap; font-size: 13px;
+  }
+  .shop-row button:disabled{ background: #3a4357; color: #97a1b8; cursor: default; }
+  #shopClose{
+    margin-top: 14px; width: 100%; border: none; border-radius: 8px; padding: 9px;
+    background: rgba(255,255,255,.14); color: #fff; cursor: pointer; font-size: 14px;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+  <button id="muteBtn" title="静音 (M)">🔊</button>
+  <button id="shopBtn" title="商店 (B)">🛒</button>
+  <button id="pauseBtn" title="暂停 (P)">⏸️</button>
+</div>
+<p id="tip">空格 / ↑ / 点击屏幕 = 跳跃（长按跳得更高） · P 暂停 · M 静音 · B 商店</p>
+
+<!-- 商店弹窗（平时隐藏，货架内容由 renderShop() 动态生成） -->
+<div id="shop" class="hidden">
+  <div id="shopCard">
+    <h2>🛒 商店 <span id="shopCoins"></span></h2>
+    <div id="shopList"></div>
+    <button id="shopClose">关 闭</button>
+    <input type="file" id="avatarFile" accept="image/*" hidden>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   《狐狸快跑》—— 一个单文件 HTML5 跑酷小游戏
+
+   双击这个文件就能在浏览器里玩，发给朋友也只需要传这一个文件。
+
+   代码导览（想学的话建议按这个顺序读）：
+     1.  常量配置     —— 想调手感和难度，改这里的数字就行
+     2.  画布与缩放
+     3.  工具函数
+     4.  音效与背景音乐 —— 全部用代码现场合成，不需要任何音频文件
+     5.  游戏全局状态
+     6.  玩家与角色   —— 角色表 CHARS：长相、连跳/滑翔能力、价格
+     7.  输入处理     —— 键盘 + 鼠标 + 触屏
+     8.  开始 / 死亡 / 重开
+     9.  粒子特效
+     10. 障碍物与金币的生成
+     11. 每帧更新（游戏规则都在这）
+     12. 背景与世界绘制（昼夜循环、视差远山）
+     13. 界面文字
+     14. 渲染一帧
+     15. 商店
+     16. 主循环
+
+   常用改装指南：
+     · 想跳得更高      → 把 JUMP_VY 改成 -900 试试
+     · 想更快/更慢     → SPEED_START / SPEED_MAX / SPEED_RAMP
+     · 障碍更密/更稀   → update() 里 distToObstacle 的公式
+     · 角色/能力/价格  → CHARS（想加新动物：在那里加一行，再到 drawCharacter 里画它）
+     · 换背景音乐      → BGM_MELODY / BGM_BASS 里的音符数字
+     · 想恢复"撞到就死" → 把 ENDLESS 改成 false
+     · 道具时长/效果   → POWER_DUR 和 activatePower()
+     · 坑的宽度/出现率 → spawnObstacle 开头的 pits 部分
+     · 商店货架与价格  → SHOP_GOODS
+   ============================================================ */
+
+/* ========== 1. 常量配置 ========== */
+const W = 900, H = 300;        // 游戏画面的逻辑尺寸（实际显示会等比缩放）
+const GROUND_Y = 256;          // 地面顶端的 y 坐标。注意：画布的 y 轴朝下，0 在最上方，数字越大越靠下
+const GRAVITY  = 2400;         // 重力加速度（像素/秒²）
+const JUMP_VY  = -820;         // 起跳瞬间的向上速度（负数代表向上）
+const JUMP_CUT = -420;         // 提前松开跳跃键时，上升速度立刻衰减到这个值 →"长按跳更高"（越接近 0，轻点跳得越矮）
+const SPEED_START = 330;       // 初始奔跑速度
+const SPEED_MAX   = 740;       // 速度上限
+const SPEED_RAMP  = 9;         // 每秒增加多少速度（难度曲线）
+const COYOTE = 0.08;           // 土狼时间：离开地面后这么多秒内仍允许起跳（经典手感技巧）
+const BUFFER = 0.12;           // 跳跃缓冲：落地前这么多秒内按下的跳跃，落地瞬间会自动执行
+const CYCLE  = 80;             // 昼夜循环一圈的秒数
+const ENDLESS = true;          // true=撞障碍只扣分不致死（但掉坑永远是致命的！）；false=撞到障碍也直接结束
+
+/* ========== 2. 画布与缩放 ========== */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// 让画布在任何屏幕（包括高分屏）上都清晰：
+// 内部像素 = CSS 尺寸 × devicePixelRatio，再用 transform 把坐标系映射回 900×300
+function resize(){
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 900;
+  canvas.width  = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssW * dpr * H / W);
+  canvas.style.height = (cssW * H / W) + 'px';
+  ctx.setTransform(canvas.width / W, 0, 0, canvas.width / W, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ========== 3. 工具函数 ========== */
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rand  = (a, b) => a + Math.random() * (b - a);
+const FONT  = '"PingFang SC","Microsoft YaHei",sans-serif';
+const TAU   = Math.PI * 2;   // 一整圈的弧度（= 2π）。画圆的角度用"弧度"表示，转一整圈就是 TAU
+
+// 圆角矩形路径（老一点的浏览器没有自带的 roundRect，所以自己写一个）
+function rr(x, y, w, h, r){
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y,     x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x,     y + h, r);
+  ctx.arcTo(x,     y + h, x,     y,     r);
+  ctx.arcTo(x,     y,     x + w, y,     r);
+  ctx.closePath();
+}
+function hexToRgb(h){
+  return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+}
+function lerpColor(a, b, t){
+  const A = hexToRgb(a), B = hexToRgb(b);
+  return 'rgb(' + Math.round(A[0]+(B[0]-A[0])*t) + ',' +
+                  Math.round(A[1]+(B[1]-A[1])*t) + ',' +
+                  Math.round(A[2]+(B[2]-A[2])*t) + ')';
+}
+const smooth = t => t * t * (3 - 2 * t);   // 让过渡更柔和的小函数
+
+/* ========== 4. 音效 ========== */
+let actx = null, muted = false;
+try{ muted = localStorage.getItem('fox_muted') === '1'; }catch(e){}
+
+// 浏览器规定：声音必须在用户第一次点击/按键之后才能播放，所以在输入事件里调它
+let masterGain = null;   // 总音量开关：所有声音都先经过它，静音=拧到 0（已经发出的音也立刻消失）
+function ensureAudio(){
+  if(!actx){
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if(AC){
+      actx = new AC();
+      masterGain = actx.createGain();
+      masterGain.gain.value = muted ? 0 : 1;
+      masterGain.connect(actx.destination);
+    }
+  }
+  // 只要不在播放状态就尝试恢复（iOS 上来电/切后台会把状态变成 'interrupted'）
+  if(actx && actx.state !== 'running') actx.resume().catch(() => {});
+}
+// 万能小喇叭：给定起始频率、结束频率、时长、波形，就能合成一个音效
+function beep(o){
+  if(muted || !actx) return;
+  const f0 = o.f0, f1 = (o.f1 === undefined ? o.f0 : o.f1);
+  const dur = o.dur || 0.1, type = o.type || 'square';
+  const vol = o.vol || 0.045, delay = o.delay || 0;
+  const t = actx.currentTime + delay;
+  const osc = actx.createOscillator(), g = actx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(f0, t);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(g); g.connect(masterGain);
+  osc.start(t); osc.stop(t + dur + 0.05);
+}
+const sfx = {
+  jump(mult){ const m = mult || 1;   // mult 越大音调越高（连跳的第二、三段用）
+              beep({f0:340*m, f1:680*m, dur:0.13, type:'square', vol:0.04}); },
+  land(){ beep({f0:160,  f1:90,   dur:0.07, type:'triangle', vol:0.035}); },
+  coin(){ beep({f0:1175, dur:0.06, type:'sine', vol:0.05});
+          beep({f0:1568, dur:0.09, type:'sine', vol:0.05, delay:0.06}); },
+  hit(){  beep({f0:220,  f1:90,   dur:0.18, type:'sawtooth', vol:0.05 }); },
+  power(){ beep({f0:523, dur:0.08, type:'square', vol:0.05});               // 吃到道具：上行琶音
+           beep({f0:659, dur:0.08, type:'square', vol:0.05, delay:0.08});
+           beep({f0:784, dur:0.14, type:'square', vol:0.05, delay:0.16}); },
+  smash(){ beep({f0:140, f1:60, dur:0.12, type:'square',   vol:0.06});      // 撞碎障碍
+           beep({f0:90,  f1:40, dur:0.16, type:'sawtooth', vol:0.05, delay:0.02}); },
+  die(){  beep({f0:300,  f1:50,   dur:0.35, type:'sawtooth', vol:0.06 }); },
+};
+const muteBtn = document.getElementById('muteBtn');
+function refreshMuteBtn(){ muteBtn.textContent = muted ? '🔇' : '🔊'; }
+refreshMuteBtn();
+function toggleMute(){
+  muted = !muted;
+  try{ localStorage.setItem('fox_muted', muted ? '1' : '0'); }catch(e){}
+  refreshMuteBtn();
+  if(masterGain) masterGain.gain.value = muted ? 0 : 1;   // 总闸立刻生效，连已排队的音符都会消失
+  if(muted) stopBGM();
+  else { ensureAudio(); startBGM(); }   // 取消静音时把音乐续上
+}
+muteBtn.addEventListener('click', () => { toggleMute(); muteBtn.blur(); });
+const pauseBtn = document.getElementById('pauseBtn');
+pauseBtn.addEventListener('click', function(){
+  if(game.state === 'playing') paused = !paused;   // 只有游戏进行中才能暂停/继续
+  this.blur();
+});
+
+/* —— 背景音乐：一段 4 小节的小曲子无限循环，也是代码现场合成的 —— */
+// 数字是 MIDI 音高（69 = 标准音 A4，每 +12 升一个八度），0 = 休止符
+// 和弦走向 C → G → Am → F，流行歌里用烂了的"万能四和弦"
+const BGM_MELODY = [
+  76,79,84,79, 76,79,72,76,   // C 和弦琶音
+  74,79,83,79, 74,79,71,74,   // G
+  76,81,84,81, 76,81,72,76,   // Am
+  77,81,84,81, 77,84,81,77,   // F
+];
+const BGM_BASS = [ 48,55,48,55, 43,50,43,50, 45,52,45,52, 41,48,41,48 ];   // 低音声部
+const BGM_STEP = 0.25;   // 一个八分音符的时长（秒）。改小曲子变快，改大变慢
+const bgm = { on: false, step: 0, nextTime: 0, timer: null };
+
+function midiToFreq(m){ return 440 * Math.pow(2, (m - 69) / 12); }
+function playNote(midi, t, dur, type, vol){
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.value = midiToFreq(midi);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(masterGain);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+// WebAudio 的常用玩法：用一个普通定时器，把"接下来一秒多"的音符提前排进播放队列
+function scheduleBGM(){
+  if(!actx || muted) return;
+  if(paused || document.hidden) return;   // 暂停或切到后台时，音乐也跟着停
+  // 停了一阵子（暂停/后台回来）的话，把排队起点拉回"现在"，避免一瞬间补播一堆旧音符
+  if(bgm.nextTime < actx.currentTime) bgm.nextTime = actx.currentTime + 0.05;
+  while(bgm.nextTime < actx.currentTime + 1.2){
+    const i = bgm.step % BGM_MELODY.length;
+    if(BGM_MELODY[i]) playNote(BGM_MELODY[i], bgm.nextTime, 0.22, 'square', 0.013);
+    if(i % 2 === 0){
+      const b = BGM_BASS[(i / 2) % BGM_BASS.length];
+      if(b) playNote(b, bgm.nextTime, 0.4, 'triangle', 0.028);
+    }
+    bgm.nextTime += BGM_STEP;
+    bgm.step++;
+  }
+}
+function startBGM(){
+  if(bgm.on || muted || !actx) return;
+  bgm.on = true;
+  bgm.nextTime = actx.currentTime + 0.05;
+  bgm.timer = setInterval(scheduleBGM, 300);
+  scheduleBGM();
+}
+function stopBGM(){
+  if(bgm.timer){ clearInterval(bgm.timer); bgm.timer = null; }
+  bgm.on = false;
+}
+
+/* ========== 5. 游戏全局状态 ========== */
+/* —— 存档：钱包金币、皮肤、强化等级（存在浏览器里，关掉网页也不会丢） —— */
+function loadSave(){
+  const def = { coins: 0, char: 'fox', chars: ['fox'], durLevel: 0, avatar: null, useAvatar: false };
+  try{
+    const s = JSON.parse(localStorage.getItem('fox_save'));
+    if(s && typeof s === 'object'){
+      const out = Object.assign({}, def, s);
+      // 老版本存的是"皮肤"（skin/owned）：自动退款，迁移到新的角色系统
+      if(s.owned){
+        if(s.owned.includes('snow'))  out.coins += 300;
+        if(s.owned.includes('night')) out.coins += 800;
+        delete out.skin; delete out.owned;
+      }
+      if(!Array.isArray(out.chars) || out.chars.length === 0) out.chars = ['fox'];
+      if(typeof out.char !== 'string') out.char = 'fox';
+      return out;
+    }
+  }catch(e){}
+  return def;
+}
+const save = loadSave();
+function saveSave(){
+  try{ localStorage.setItem('fox_save', JSON.stringify(save)); }catch(e){}
+}
+
+/* —— 表情系统：撞到=痛苦，吃道具/撞碎=开心，阵亡=X 眼 —— */
+const face = { mood: '', until: 0 };   // mood: 'hurt'=痛 | 'joy'=开心 | ''=平常
+function setFace(mood, dur){ face.mood = mood; face.until = bgTime + dur; }
+
+/* —— 真人头像：用户上传的照片（存在存档里，角色的头会换成它） —— */
+let avatarImg = null;
+function loadAvatarImg(){
+  if(!save.avatar || typeof Image === 'undefined') return;
+  avatarImg = new Image();
+  avatarImg.src = save.avatar;
+}
+loadAvatarImg();
+
+let best = 0;
+try{ best = parseInt(localStorage.getItem('fox_best')) || 0; }catch(e){}
+
+const game = {
+  state: 'ready',      // ready=开始界面 | playing=游戏中 | dead=游戏结束
+  speed: SPEED_START,
+  dist: 0,             // 世界总滚动距离（背景视差用，永不清零，保证背景连贯）
+  runDist: 0,          // 本局跑过的距离（算分用，每局清零）
+  score: 0,
+  coinCount: 0,
+  penalty: 0,          // 撞障碍攒下的扣分（休闲模式用）
+  bonus: 0,            // 撞碎障碍攒下的加分（道具生效时）
+  best: best,
+  newBest: false,
+  shake: 0,            // 屏幕震动强度（死亡时的"打击感"）
+  deathBy: '',         // 这局是怎么结束的：'pit'=掉坑，'hit'=撞死（经典模式）
+  deadAt: 0,
+};
+let bgTime = 0;        // 游戏世界的总时钟（昼夜、各种动画用它驱动）
+let paused = false;
+const obstacles = [], coins = [], particles = [];
+const pits = [];            // 坑：地面上的致命缺口——唯一会让游戏直接结束的东西
+let distToObstacle = 750;   // 还要跑多远生成下一个障碍
+let distToCoin = 500;       // 还要跑多远生成下一串金币
+let invulnUntil = 0;        // 撞到障碍后的短暂无敌截止时刻（防止同一块石头每帧都扣分）
+
+/* —— 道具系统 —— */
+const POWER_DUR  = { dash: 4, giant: 7, magnet: 9 };   // 各道具的基础持续秒数
+const POWER_INFO = {
+  dash:   { name: '冲刺', color: '#ffd34d' },   // 高速狂奔，撞碎一切，顺带吸金币
+  giant:  { name: '变大', color: '#c77dff' },   // 巨大化，横着撞碎障碍
+  magnet: { name: '磁铁', color: '#ff6b6b' },   // 附近的金币自动飞过来
+};
+const power = { type: null, until: 0, total: 1 };   // 当前生效的道具
+const items = [];                                   // 场上漂浮的道具
+let distToItem = 2200;      // 还要跑多远出现下一个道具
+
+/* ========== 6. 玩家与角色 ========== */
+// 角色表：每个角色有自己的长相、能力和身价，能力越强越贵！
+//   jumps = 总共能跳几段（1=只能地面跳，2=二连跳，3=三连跳）
+//   glide = 会不会滑翔（空中按住跳跃键就缓缓飘落）
+//   kind  = 用哪套画法（fox/pig/monkey/dragon，见 drawCharacter）
+const CHARS = {
+  fox: { name:'橙狐', price:0, jumps:1, glide:false, kind:'fox',
+    desc:'最初的伙伴，朴实可靠',
+    c:{ body:'#f8a155', body2:'#e0731f', dark:'#c96a25', belly:'#ffd9b0', ear:'#7c3f12', tail:'#e8833a', scarf:'#e84545' } },
+  pig: { name:'小猪噜噜', price:400, jumps:2, glide:false, kind:'pig',
+    desc:'圆滚滚的二连跳选手：空中再按一次跳跃！',
+    c:{ body:'#fbb8cd', body2:'#ef8fb0', dark:'#d97fa0', belly:'#ffe3ec', snout:'#ffc7d8', scarf:'#4f87d6' } },
+  monkey: { name:'小猴跳跳', price:1200, jumps:3, glide:false, kind:'monkey',
+    desc:'灵活的三连跳大师，空中还能再跳两次',
+    c:{ body:'#b5805a', body2:'#92603d', dark:'#7c5232', belly:'#e8c79e', face:'#e8c79e', scarf:'#ffd34d' } },
+  snowfox: { name:'雪狐飘飘', price:2600, jumps:2, glide:true, kind:'fox',
+    desc:'二连跳 + 滑翔：空中按住跳跃键，像羽毛一样飘',
+    c:{ body:'#f4f8fd', body2:'#d8e2ee', dark:'#b9c6d6', belly:'#ffffff', ear:'#8aa0b8', tail:'#dce6f2', scarf:'#7fb3ff' } },
+  dragon: { name:'小龙腾腾', price:5000, jumps:3, glide:true, kind:'dragon',
+    desc:'传说级！三连跳 + 滑翔，几乎就是在飞',
+    c:{ body:'#5fd9ad', body2:'#2f9d7a', dark:'#2a8a6b', belly:'#d8ffe9', spike:'#ffd34d', wing:'#a9f0d6', scarf:'#ff8a5c' } },
+};
+const player = {
+  x: 120, w: 44, h: 36,
+  y: GROUND_Y,         // y 记录的是脚底的位置
+  vy: 0,
+  grounded: true,
+  jumpsUsed: 0,        // 这次离地后已经跳了几段（连跳角色用）
+  gliding: false,      // 正在滑翔吗
+  inPit: false,        // 已经掉进坑里了吗（掉进去就踩不到地了，除非跳回坑口以上）
+  phase: 0,            // 跑步动画的相位（驱动腿的摆动）
+  squash: 0, sx: 1, sy: 1,   // 压扁/拉伸（落地压扁、起跳拉长，让动作有弹性）
+  blinkT: 2, blinking: 0,    // 眨眼计时
+  dustT: 0,                  // 跑步扬尘计时
+  lastGrounded: 0,           // 最近一次在地面的时刻（土狼时间用）
+  lastPress: -1e9,           // 最近一次按跳跃的时刻。-1e9 是科学计数法=负十亿，即"很久以前"=从没按过
+};
+function resetPlayer(){
+  player.x = 120;   // 掉坑时人会跟着世界往左滑，重开时拉回原位
+  player.y = GROUND_Y; player.vy = 0; player.grounded = true;
+  player.jumpsUsed = 0; player.gliding = false; player.inPit = false;
+  player.phase = 0; player.squash = 0;
+  player.lastGrounded = 0; player.lastPress = -1e9;
+}
+
+/* ========== 7. 输入处理 ========== */
+// jumpHeld 记录"跳跃键现在被谁按着"：null=没人 | 'key'=键盘 | 'pointer'=鼠标/手指。
+// 按下和松开必须来自同一方才算配对，否则会出现
+// "键盘长按大跳时，在别处点了一下鼠标，跳跃被莫名打断"这类怪事。
+let jumpHeld = null;
+function pressJump(source){
+  ensureAudio();
+  if(paused){ paused = false; return; }
+  if(game.state === 'ready'){ startGame(); return; }
+  if(game.state === 'dead'){
+    // 死后停 0.45 秒才接受重开，防止手里的按键把结算画面"按穿"
+    if(bgTime - game.deadAt > 0.45) startGame();
+    return;
+  }
+  jumpHeld = source;
+  // 空中连跳：角色还有剩余跳跃段数时，在空中按跳跃就直接再跳一次
+  const ch = CHARS[save.char] || CHARS.fox;
+  if(!player.grounded && bgTime - player.lastGrounded > COYOTE && player.jumpsUsed < ch.jumps &&
+     player.y < GROUND_Y + 26){   // 掉坑太深就救不回来了
+    airJump();
+    return;
+  }
+  player.lastPress = bgTime;
+}
+function airJump(){
+  const p = player;
+  p.jumpsUsed++;
+  p.vy = JUMP_VY * 0.88;   // 空中跳比地面跳略矮一点
+  p.gliding = false;
+  sfx.jump(1 + 0.18 * (p.jumpsUsed - 1));   // 第二、三段跳音调依次升高
+  burst(p.x + p.w / 2, p.y - 4, 7, ['#ffffff', '#cfe4ff']);   // 蹬空气的小白花
+}
+function releaseJump(source){
+  if(jumpHeld !== source) return;   // 不是按下的那一方松开的，不算数
+  jumpHeld = null;
+  // 上升途中松手 → 砍掉一部分上升速度，实现"长按跳得更高"
+  if(game.state === 'playing' && player.vy < JUMP_CUT) player.vy = JUMP_CUT;
+}
+window.addEventListener('keydown', e => {
+  if(shopOpen()){   // 商店开着时，键盘只负责关商店
+    if(e.code === 'Escape' || e.code === 'KeyB') toggleShop(false);
+    return;
+  }
+  if(e.code === 'Space' || e.code === 'ArrowUp') e.preventDefault();  // 防止空格滚动页面
+  if(e.repeat) return;   // 忽略按住不放产生的重复事件
+  if(e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') pressJump('key');
+  else if(e.code === 'KeyP'){ if(game.state === 'playing') paused = !paused; }
+  else if(e.code === 'KeyM') toggleMute();
+  else if(e.code === 'KeyB') toggleShop(true);
+  else if(e.code === 'KeyR'){ if(game.state === 'dead' && bgTime - game.deadAt > 0.45) startGame(); }
+});
+window.addEventListener('keyup', e => {
+  if(e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') releaseJump('key');
+});
+canvas.addEventListener('pointerdown', e => {
+  if(e.pointerType === 'mouse' && e.button !== 0) return;   // 鼠标只认左键，右键/中键不跳
+  e.preventDefault();
+  pressJump('pointer');
+});
+window.addEventListener('pointerup', () => releaseJump('pointer'));
+// 触摸被系统打断（来电、下拉通知栏等）时，浏览器发的是 pointercancel 而不是 pointerup
+window.addEventListener('pointercancel', () => releaseJump('pointer'));
+// iPhone 的音频解锁有时只认"手指松开"的那一下，所以松开时也尝试解锁并把音乐续上
+window.addEventListener('pointerup', () => { ensureAudio(); if(game.state === 'playing') startBGM(); });
+window.addEventListener('click',     () => { ensureAudio(); if(game.state === 'playing') startBGM(); });
+canvas.addEventListener('contextmenu', e => e.preventDefault());   // 屏蔽画布上的右键菜单
+// 切到别的标签页时自动暂停，回来不会突然撞死
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden){
+    if(game.state === 'playing') paused = true;
+    saveBest();   // 切走时顺手保存最高分
+  }
+});
+window.addEventListener('pagehide', () => saveBest());   // 关闭/刷新页面前保存最高分
+
+/* ========== 8. 开始 / 死亡 / 重开 ========== */
+function startGame(){
+  game.state = 'playing';
+  game.speed = SPEED_START;
+  game.runDist = 0; game.score = 0; game.coinCount = 0;
+  game.penalty = 0; game.bonus = 0; invulnUntil = 0;
+  game.newBest = false; game.shake = 0; game.deathBy = '';
+  power.type = null;
+  obstacles.length = 0; coins.length = 0; particles.length = 0; pits.length = 0;
+  items.length = 0; floats.length = 0; distToItem = 2200;
+  distToObstacle = 750; distToCoin = 500;
+  paused = false;
+  jumpHeld = null;
+  face.until = 0;
+  resetPlayer();
+  startBGM();
+}
+function die(cause){
+  game.state = 'dead';
+  game.deathBy = cause || 'hit';
+  game.deadAt = bgTime;
+  game.shake = 13;
+  sfx.die();
+  burst(player.x + player.w/2, Math.min(player.y - player.h/2, H - 20), 26, ['#ff9b4b','#ffd34d','#ffffff']);
+  if(game.score > game.best){
+    game.best = game.score; game.newBest = true;
+  }
+  saveBest();
+}
+// 休闲模式下撞到障碍：绊一下——扣 20 分、震屏、短暂无敌闪烁，但游戏继续
+function stumble(){
+  invulnUntil = bgTime + 1.0;
+  game.penalty += 20;
+  game.shake = 8;
+  setFace('hurt', 1.0);   // 痛苦表情
+  sfx.hit();
+  burst(player.x + player.w / 2, player.y - player.h / 2, 14, ['#ff9b4b', '#ffffff']);
+  floatText(player.x + player.w / 2, player.y - player.h - 16, '-20', '#ff6b6b');
+}
+function saveBest(){
+  try{ localStorage.setItem('fox_best', String(game.best)); }catch(e){}
+  saveSave();   // 顺手把钱包/皮肤也存了
+}
+
+/* ========== 9. 粒子特效 ========== */
+function burst(x, y, n, colors){
+  for(let i = 0; i < n; i++){
+    particles.push({
+      x: x, y: y,
+      vx: rand(-220, 220), vy: rand(-260, 40),
+      life: 0, max: rand(0.4, 0.9),
+      size: rand(2, 5),
+      color: colors[Math.floor(Math.random() * colors.length)],
+      grav: 600,
+    });
+  }
+}
+function puff(x, y){   // 跑步、起跳、落地时脚下的小灰尘
+  particles.push({
+    x: x, y: y,
+    vx: rand(-80, -20), vy: rand(-40, -5),
+    life: 0, max: rand(0.25, 0.5),
+    size: rand(2, 4),
+    color: 'rgba(160,140,110,0.8)',
+    grav: -30,
+  });
+}
+const floats = [];   // 飘字（吃金币 +5、撞障碍 -20 这类小反馈）
+function floatText(x, y, txt, color){
+  floats.push({ x: x, y: y, txt: txt, color: color, life: 0 });
+}
+function updateParticles(dt){
+  for(let i = particles.length - 1; i >= 0; i--){
+    const p = particles[i];
+    p.life += dt;
+    if(p.life >= p.max){ particles.splice(i, 1); continue; }
+    p.vy += p.grav * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+  }
+  // 飘字慢慢往上飘，0.8 秒后消失
+  for(let i = floats.length - 1; i >= 0; i--){
+    const f = floats[i];
+    f.life += dt; f.y -= 34 * dt;
+    if(f.life > 0.8) floats.splice(i, 1);
+  }
+}
+
+/* ========== 10. 障碍物与金币的生成 ========== */
+// 设计原则：越高的障碍越窄，保证任何速度下都跳得过去（数值算过账，别随便改高度上限）
+// 新障碍要跑一段距离才解锁，开局先用基本三件套熟悉手感
+function spawnObstacle(){
+  const r = Math.random();
+  const d = game.runDist / 12;   // 换算成"米"（和屏幕上显示的得分同一个单位）
+  // 坑：约 9 秒后开始出现，唯一致命的东西！掉下去游戏直接结束
+  // （连跳角色在掉落瞬间还能空中跳自救，滑翔角色更是轻松飘过去）
+  if(d > 250 && Math.random() < 0.16){
+    pits.push({ x: W + 80, w: rand(70, 140) });
+    return;
+  }
+  let w, h, type;
+  if(d > 400 && r < 0.12){        type = 'spikes';   w = rand(56, 88); h = 20; }           // 约 12 秒后解锁：一排尖刺
+  else if(d > 800 && r < 0.24){   type = 'birdLow';  w = 36; h = 26; }                     // 约 22 秒后解锁：低空鸟，必须跳过
+  else if(d > 1300 && r < 0.32){  type = 'birdHigh'; w = 36; h = 26; }                     // 约 33 秒后解锁：高空鸟，贴地跑才安全，跳起来反而撞！
+  else if(r < 0.62){              type = 'rock';     w = rand(26, 46); h = rand(34, 52); } // 普通石头
+  else if(r < 0.83){              type = 'cactus';   w = rand(22, 32); h = rand(56, 78); } // 高瘦仙人掌
+  else {                          type = 'double';   w = rand(58, 72); h = rand(30, 48); } // 宽矮双石
+  const o = { x: W + 80, w: w, h: h, type: type };
+  if(type === 'birdLow'){  o.alt = 22; o.extraV = 60; }   // alt=离地高度，extraV=额外迎面飞来的速度
+  if(type === 'birdHigh'){ o.alt = 62; o.extraV = 60; }
+  obstacles.push(o);
+  // 鸟和金币不能挨在一起：金币会诱导玩家跳起，正好撞上"不该跳"的高空鸟
+  if(o.alt){
+    for(let i = coins.length - 1; i >= 0; i--){
+      if(Math.abs(coins[i].x - o.x) < 260) coins.splice(i, 1);
+    }
+  }
+}
+function spawnCoins(){
+  // 屏幕右侧附近有鸟时先不发金币，过 250px 再试（理由见 spawnObstacle 里的注释）
+  for(const o of obstacles){
+    if(o.alt && o.x > W - 280){ distToCoin = 250; return; }
+  }
+  const n = 3 + Math.floor(Math.random() * 3);    // 一串 3~5 枚
+  // 高度上限压在最高障碍（78px）之上：保证任何金币都能安全吃到，不会"诱人送死"
+  const baseY = rand(140, 170), arc = rand(0, 26);
+  for(let i = 0; i < n; i++){
+    const t = n === 1 ? 0.5 : i / (n - 1);
+    coins.push({
+      x: W + 60 + i * 34,
+      y: baseY - Math.sin(t * Math.PI) * arc,     // 排成一道小弧线
+      phase: Math.random() * TAU,
+    });
+  }
+}
+// 障碍的碰撞框：四周各往里收一点（比看上去略小），擦个边不算撞，对玩家宽容些才公平
+// alt = 离地高度（鸟类障碍悬在空中，地面障碍不传这个参数就是 0）
+function hitbox(x, w, h, alt){
+  alt = alt || 0;
+  return { x: x + 4, y: GROUND_Y - alt - h + 4, w: w - 8, h: h - 4 };
+}
+// 玩家脚底中心是否悬在坑上（坑的左右各留 8px 的边，站在坑沿上不算掉）
+function overPit(){
+  const cx = player.x + player.w / 2;
+  for(const pt of pits){
+    if(cx > pt.x + 8 && cx < pt.x + pt.w - 8) return true;
+  }
+  return false;
+}
+function spawnItem(){
+  const types = ['dash', 'giant', 'magnet'];
+  items.push({
+    x: W + 60,
+    y: rand(140, 170),   // 和金币同一条安全线：永远悬在最高障碍之上，不"诱人送死"
+    type: types[Math.floor(Math.random() * types.length)],
+    phase: Math.random() * TAU,
+  });
+}
+function activatePower(type){
+  power.type = type;
+  power.total = POWER_DUR[type] + save.durLevel * 1.5;   // 商店升级会加时长
+  power.until = bgTime + power.total;
+  setFace('joy', 1.2);   // 开心表情
+  sfx.power();
+  floatText(player.x + player.w / 2, player.y - player.h - 24,
+            POWER_INFO[type].name + '！', POWER_INFO[type].color);
+}
+
+/* ========== 11. 每帧更新（游戏规则都在这里） ========== */
+function update(dt){
+  bgTime += dt;
+
+  if(game.state === 'ready'){
+    game.dist += 60 * dt;          // 开始界面背景慢慢滚动
+    player.phase += dt * 9;        // 狐狸原地小跑
+    tickPlayerCosmetics(dt);
+    updateParticles(dt);
+    return;
+  }
+  if(game.state === 'dead'){
+    updateParticles(dt);
+    game.shake = Math.max(0, game.shake - 40 * dt);
+    return;
+  }
+
+  // —— 下面是游戏进行中 ——
+  if(power.type && bgTime > power.until){
+    // 冲刺/变大结束的瞬间给 0.6 秒缓冲无敌：免得"差一帧就能撞碎"的障碍贴脸把你绊倒
+    if(power.type === 'dash' || power.type === 'giant'){
+      invulnUntil = Math.max(invulnUntil, bgTime + 0.6);
+    }
+    power.type = null;   // 道具到点失效
+  }
+
+  game.speed = Math.min(SPEED_MAX, game.speed + SPEED_RAMP * dt);
+  // 冲刺道具生效时世界加速 1.8 倍（相对地，就是狐狸在狂奔）
+  const move = game.speed * (power.type === 'dash' ? 1.8 : 1) * dt;
+  game.dist += move; game.runDist += move;
+
+  // 生成障碍：间距随速度变大（速度越快，留给反应的距离越长）
+  distToObstacle -= move;
+  if(distToObstacle <= 0){
+    spawnObstacle();
+    // 用"有效速度"（冲刺时 ×1.8）算间距，否则冲刺末尾刷出的障碍恢复常速后会离得太近
+    distToObstacle = game.speed * (power.type === 'dash' ? 1.8 : 1) * 0.6 + 280 + Math.random() * 320;
+  }
+  distToCoin -= move;
+  if(distToCoin <= 0){ spawnCoins(); distToCoin = 600 + Math.random() * 700; }
+
+  // 所有东西向左移动，出了屏幕就清理掉
+  for(let i = obstacles.length - 1; i >= 0; i--){
+    obstacles[i].x -= move + (obstacles[i].extraV || 0) * dt;   // 鸟有额外的迎面飞行速度
+    if(obstacles[i].x + obstacles[i].w < -60) obstacles.splice(i, 1);
+  }
+  for(let i = pits.length - 1; i >= 0; i--){
+    pits[i].x -= move;
+    if(pits[i].x + pits[i].w < -60) pits.splice(i, 1);
+  }
+  for(let i = coins.length - 1; i >= 0; i--){
+    coins[i].x -= move;
+    if(coins[i].x < -40) coins.splice(i, 1);
+  }
+
+  // 道具：每隔一段路出现一个
+  distToItem -= move;
+  if(distToItem <= 0){ spawnItem(); distToItem = 2000 + Math.random() * 1800; }
+  for(let i = items.length - 1; i >= 0; i--){
+    items[i].x -= move;
+    if(items[i].x < -40) items.splice(i, 1);
+  }
+
+  updatePlayer(dt);
+  if(game.state !== 'playing') return;   // 可能刚在 updatePlayer 里掉坑死掉了
+  updateParticles(dt);
+  game.shake = Math.max(0, game.shake - 40 * dt);
+
+  // 撞障碍判定（碰撞框比画面上看到的略小，对玩家宽容一点，手感更公平）
+  const pb = { x: player.x + 7, y: player.y - player.h + 6, w: player.w - 14, h: player.h - 8 };
+  if(power.type === 'dash' || power.type === 'giant'){
+    // 冲刺/变大期间：碰到障碍直接撞碎，每个 +2 分（判定框放大 8px，撞起来更爽）
+    for(let i = obstacles.length - 1; i >= 0; i--){
+      const o = obstacles[i];
+      const boxes = o.type === 'double'
+        ? [ hitbox(o.x,              o.w * 0.55, o.h),
+            hitbox(o.x + o.w * 0.45, o.w * 0.55, o.h * 0.72) ]
+        : [ hitbox(o.x, o.w, o.h, o.alt) ];
+      let smashed = false;
+      for(const ob of boxes){
+        if(pb.x < ob.x + ob.w + 8 && pb.x + pb.w > ob.x - 8 &&
+           pb.y < ob.y + ob.h + 8 && pb.y + pb.h > ob.y - 8){ smashed = true; break; }
+      }
+      if(smashed){
+        obstacles.splice(i, 1);
+        game.bonus += 2;
+        game.shake = Math.max(game.shake, 5);
+        setFace('joy', 0.5);   // 撞碎东西很爽！
+        sfx.smash();
+        burst(o.x + o.w / 2, GROUND_Y - (o.alt || 0) - o.h / 2, 14, ['#cfd8c2', '#8fa07e', '#ffffff']);
+        floatText(o.x + o.w / 2, GROUND_Y - (o.alt || 0) - o.h - 12, '+2', '#b8ffb0');
+      }
+    }
+  } else if(bgTime >= invulnUntil){   // 刚撞过的短暂无敌期内，不再重复判定
+    for(const o of obstacles){
+      // double 型画的是一高一矮两块石头，碰撞框也拆成两个，否则矮石上方会有"隐形死区"
+      const boxes = o.type === 'double'
+        ? [ hitbox(o.x,              o.w * 0.55, o.h),
+            hitbox(o.x + o.w * 0.45, o.w * 0.55, o.h * 0.72) ]
+        : [ hitbox(o.x, o.w, o.h, o.alt) ];
+      for(const ob of boxes){
+        if(pb.x < ob.x + ob.w && pb.x + pb.w > ob.x &&
+           pb.y < ob.y + ob.h && pb.y + pb.h > ob.y){
+          if(!ENDLESS){ die(); return; }   // 经典模式：撞到就结束
+          stumble();                       // 休闲模式：绊一下，继续跑
+          break;
+        }
+      }
+      if(bgTime < invulnUntil) break;      // 这一帧已经绊到了，别的障碍不用再查
+    }
+  }
+
+  // 吃道具（变大期间狐狸个头大了，拾取范围也要跟着变大，不然"看着碰到了却没吃到"）
+  const pickR = (power.type === 'giant') ? 32 : 20;
+  for(let i = items.length - 1; i >= 0; i--){
+    const it = items[i];
+    const inx = clamp(it.x, pb.x, pb.x + pb.w);
+    const iny = clamp(it.y, pb.y, pb.y + pb.h);
+    if((it.x - inx) * (it.x - inx) + (it.y - iny) * (it.y - iny) < pickR * pickR){
+      items.splice(i, 1);
+      activatePower(it.type);
+      burst(it.x, it.y, 10, [POWER_INFO[it.type].color, '#ffffff']);
+    }
+  }
+
+  // 磁铁（冲刺也自带吸金币）：附近的金币自动飞过来
+  if(power.type === 'magnet' || power.type === 'dash'){
+    const mcx = player.x + player.w / 2, mcy = player.y - player.h / 2;
+    for(const c of coins){
+      const dx = mcx - c.x, dy = mcy - c.y;
+      const dd = Math.sqrt(dx * dx + dy * dy);
+      if(dd < 170 && dd > 1){
+        c.x += dx / dd * 520 * dt;
+        c.y += dy / dd * 520 * dt;
+      }
+    }
+  }
+
+  // 冲刺时的金色拖尾
+  if(power.type === 'dash'){
+    particles.push({ x: player.x + rand(-6, 10), y: player.y - rand(4, player.h),
+      vx: -rand(380, 520), vy: rand(-20, 20), life: 0, max: rand(0.15, 0.3),
+      size: rand(2, 5), color: Math.random() < 0.5 ? '#ffd34d' : '#fff6d8', grav: 0 });
+  }
+
+  // 吃金币（圆和矩形的碰撞判定）
+  for(let i = coins.length - 1; i >= 0; i--){
+    const c = coins[i];
+    const nx = clamp(c.x, pb.x, pb.x + pb.w);
+    const ny = clamp(c.y, pb.y, pb.y + pb.h);
+    if((c.x - nx) * (c.x - nx) + (c.y - ny) * (c.y - ny) < 13 * 13){
+      coins.splice(i, 1);
+      game.coinCount++;
+      save.coins++;            // 金币进钱包，攒着去商店花
+      if(game.coinCount % 10 === 0) saveSave();   // 每攒 10 枚顺手存一次档
+      sfx.coin();
+      burst(c.x, c.y, 6, ['#ffd34d', '#fff3b0']);
+      floatText(c.x, c.y - 14, '+5分', '#ffd34d');
+    }
+  }
+
+  // 得分 = 距离 + 金币奖励 + 撞碎奖励 - 撞障碍扣分（最低 0 分）
+  game.score = Math.max(0, Math.floor(game.runDist / 12) + game.coinCount * 5 + game.bonus - game.penalty);
+  if(game.score > game.best) game.best = game.score;   // 积分制：最高纪录实时刷新
+}
+
+function updatePlayer(dt){
+  const p = player;
+
+  // 起跳判定：跳跃缓冲 + 土狼时间，让操作判定更宽容（很多名作都这么做）
+  const canJump = p.grounded || (bgTime - p.lastGrounded <= COYOTE && p.vy >= 0);
+  if(bgTime - p.lastPress <= BUFFER && canJump){
+    // 缓冲跳触发时按键可能已经松开了：松开的按"轻点"的力度起跳，还按着的才全力起跳
+    p.vy = (jumpHeld !== null) ? JUMP_VY : JUMP_VY * 0.8;
+    p.grounded = false;
+    p.jumpsUsed = 1;      // 地面跳算第 1 段，连跳角色还能在空中续
+    p.lastPress = -1e9;   // 设回"很久以前"，表示这次按键已经用掉了
+    sfx.jump();
+    puff(p.x + 6, GROUND_Y - 2); puff(p.x + p.w - 6, GROUND_Y - 2);
+  }
+
+  if(!p.grounded){
+    p.vy += GRAVITY * dt;     // 重力把速度往下拉
+    // 滑翔：会滑翔的角色在下落时按住跳跃键，就像张开小降落伞一样缓缓飘
+    const ch = CHARS[save.char] || CHARS.fox;
+    p.gliding = ch.glide && jumpHeld !== null && p.vy > 0;
+    if(p.gliding) p.vy = Math.min(p.vy, 110);
+    p.y += p.vy * dt;         // 速度改变位置
+    if(p.y < GROUND_Y - 2) p.inPit = false;   // 跳回到坑口以上了，恢复"可以落地"
+    if(p.y >= GROUND_Y && !p.inPit && !overPit()){   // 落地（脚下得有地，且不是已坠坑状态）
+      p.y = GROUND_Y; p.vy = 0; p.grounded = true;
+      p.jumpsUsed = 0; p.gliding = false;   // 落地后连跳次数重置
+      p.squash = 0.3;         // 落地压扁一下
+      sfx.land();
+      puff(p.x + 10, GROUND_Y - 2); puff(p.x + p.w - 10, GROUND_Y - 2);
+    } else if(p.y >= GROUND_Y){
+      // 正在坑里下坠：跟着世界一起往左滑，看起来就是掉进了洞里。
+      // 标记"已坠坑"——就算坑随后滑出屏幕被清理掉，也不能凭空落地（之前的 bug）
+      p.inPit = true;
+      p.x -= game.speed * (power.type === 'dash' ? 1.8 : 1) * dt;
+      if(p.y > H + 30 || p.x + p.w < 0){ die('pit'); return; }   // 掉出屏幕或滑出左边界，这局结束
+    }
+  } else {
+    if(overPit()){
+      p.grounded = false;   // 脚下的地没了！开始掉（土狼时间还留 0.08 秒让你起跳自救）
+    } else {
+      p.lastGrounded = bgTime;
+      p.phase += dt * (game.speed / 22);   // 跑得越快腿摆得越快
+      p.dustT -= dt;
+      if(p.dustT <= 0){ puff(p.x + 8, GROUND_Y - 2); p.dustT = 0.09; }
+    }
+  }
+
+  tickPlayerCosmetics(dt);
+}
+
+// 纯外观的动画（压扁拉伸、眨眼），和游戏规则无关
+function tickPlayerCosmetics(dt){
+  const p = player;
+  const target = p.grounded ? 0 : (p.vy < 0 ? -0.12 : 0.08);
+  p.squash += (target - p.squash) * Math.min(1, dt * 10);
+  p.sy = 1 - p.squash;
+  p.sx = 1 + p.squash * 0.7;
+  if(p.blinking > 0) p.blinking -= dt;
+  else {
+    p.blinkT -= dt;
+    if(p.blinkT <= 0){ p.blinking = 0.12; p.blinkT = rand(1.5, 4); }
+  }
+}
+
+/* ========== 12. 背景与世界绘制 ========== */
+// 四组配色：白天 → 黄昏 → 黑夜 → 黎明，随时间平滑过渡
+const PALETTES = [
+  { top:'#6ec6ff', bot:'#dff4ff', far:'#9fd6b1', near:'#6fbd7f', ground:'#e9dcae' },
+  { top:'#54519e', bot:'#ff9d76', far:'#8a7fb0', near:'#5f6f8e', ground:'#d9bd92' },
+  { top:'#0e1430', bot:'#27355e', far:'#2c3a5e', near:'#22304e', ground:'#8b86a8' },
+  { top:'#3a6fae', bot:'#ffd9a0', far:'#7fb39a', near:'#5da272', ground:'#e0d2a2' },
+];
+const stars = [];
+for(let i = 0; i < 55; i++){
+  stars.push({ x: Math.random() * W, y: Math.random() * 150, r: Math.random() * 1.4 + 0.4, tw: Math.random() * TAU });
+}
+const clouds = [];
+for(let i = 0; i < 4; i++){
+  clouds.push({ x: Math.random() * W, y: rand(30, 110), s: rand(0.6, 1.3), f: rand(0.05, 0.12) });
+}
+
+function skyPalette(){
+  const u = (bgTime % CYCLE) / CYCLE * 4;
+  // ((x % 4) + 4) % 4 这种写法保证结果一定落在 0~3（JS 的 % 对负数会返回负数）
+  const i = ((Math.floor(u) % 4) + 4) % 4;
+  const f = smooth(u - Math.floor(u));
+  const a = PALETTES[i], b = PALETTES[(i + 1) % 4];
+  const mix = {};
+  for(const k of ['top', 'bot', 'far', 'near', 'ground']) mix[k] = lerpColor(a[k], b[k], f);
+  mix.night = clamp(1 - Math.abs(u - 2.5), 0, 1);   // 0=白天 1=深夜（控制星星和夜色）
+  return mix;
+}
+
+function drawBackground(pal){
+  // 天空渐变
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, pal.top); g.addColorStop(1, pal.bot);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  // 星星（夜里才出现，一闪一闪）
+  if(pal.night > 0.02){
+    for(const s of stars){
+      ctx.globalAlpha = pal.night * (0.5 + 0.5 * Math.sin(bgTime * 2 + s.tw));
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(s.x, s.y, s.r * 2, s.r * 2);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // 云（夜里会变暗）
+  ctx.fillStyle = 'rgba(255,255,255,' + (0.85 - 0.55 * pal.night) + ')';
+  for(const c of clouds){
+    const span = W + 200;
+    // % 取余数让云的位置在 0~span 之间循环（飘出左边就从右边回来）。
+    // JS 里负数取余的结果还是负数，所以先 +span 再取一次余，保证结果一定是正数
+    const cx = ((c.x - game.dist * c.f) % span + span) % span - 100;
+    cloud(cx, c.y, c.s);
+  }
+
+  // 远山、近山：移动速度不同 → 产生纵深感（这招叫"视差滚动"）
+  drawHills(pal.far,  215, 70, 420, 0.18);
+  drawHills(pal.near, 235, 55, 300, 0.4);
+
+  // 地面
+  ctx.fillStyle = pal.ground;
+  ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(0, GROUND_Y, W, 3);
+  // 地上的小石子跟着世界一起往左跑，速度感全靠它们
+  ctx.fillStyle = 'rgba(0,0,0,0.13)';
+  for(let x = -(game.dist % 90); x < W; x += 90){
+    ctx.fillRect(x, GROUND_Y + 14, 14, 3);
+    ctx.fillRect(x + 40, GROUND_Y + 30, 8, 3);
+  }
+}
+function cloud(x, y, s){
+  ctx.beginPath();
+  ctx.ellipse(x,        y,         34 * s, 14 * s, 0, 0, TAU);
+  ctx.ellipse(x - 22*s, y + 4 * s, 20 * s, 10 * s, 0, 0, TAU);
+  ctx.ellipse(x + 24*s, y + 5 * s, 22 * s, 11 * s, 0, 0, TAU);
+  ctx.fill();
+}
+function drawHills(color, baseY, amp, wl, parallax){
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(-wl, H);
+  const off = -((game.dist * parallax) % wl);
+  for(let x = off - wl; x < W + wl; x += wl){
+    ctx.lineTo(x, baseY);
+    ctx.quadraticCurveTo(x + wl / 2, baseY - amp, x + wl, baseY);
+  }
+  ctx.lineTo(W + wl, H);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// 坑：地面上的致命缺口，画成一个越往下越黑的深洞
+function drawPits(){
+  for(const pt of pits){
+    const g = ctx.createLinearGradient(0, GROUND_Y, 0, H);
+    g.addColorStop(0, '#3a3142');
+    g.addColorStop(1, '#120e1a');
+    ctx.fillStyle = g;
+    ctx.fillRect(pt.x, GROUND_Y, pt.w, H - GROUND_Y);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';   // 洞口两侧的阴影边，提示这里是悬崖
+    ctx.fillRect(pt.x, GROUND_Y, 4, H - GROUND_Y);
+    ctx.fillRect(pt.x + pt.w - 4, GROUND_Y, 4, H - GROUND_Y);
+  }
+}
+function drawObstacles(){
+  for(const o of obstacles){
+    const top = GROUND_Y - o.h;
+    if(o.type === 'cactus'){
+      const cx = o.x + o.w / 2;
+      ctx.fillStyle = '#3f8c4b';
+      rr(cx - 7, top, 14, o.h, 7); ctx.fill();                       // 主干
+      rr(cx - 19, top + o.h * 0.28, 8, o.h * 0.32, 4); ctx.fill();   // 左臂
+      rr(cx - 15, top + o.h * 0.50, 10, 7, 3); ctx.fill();
+      rr(cx + 11, top + o.h * 0.18, 8, o.h * 0.30, 4); ctx.fill();   // 右臂
+      rr(cx + 5,  top + o.h * 0.38, 10, 7, 3); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      rr(cx - 4, top + 4, 3, o.h - 12, 2); ctx.fill();               // 高光
+    } else if(o.type === 'double'){
+      rock(o.x, o.w * 0.55, o.h);
+      rock(o.x + o.w * 0.45, o.w * 0.55, o.h * 0.72);
+    } else if(o.type === 'spikes'){
+      // 一排小尖刺
+      ctx.fillStyle = '#9aa7b8';
+      const n = Math.max(3, Math.round(o.w / 14));
+      for(let i = 0; i < n; i++){
+        const sx = o.x + i * (o.w / n);
+        ctx.beginPath();
+        ctx.moveTo(sx, GROUND_Y);
+        ctx.lineTo(sx + o.w / n / 2, GROUND_Y - o.h);
+        ctx.lineTo(sx + o.w / n, GROUND_Y);
+        ctx.closePath(); ctx.fill();
+      }
+    } else if(o.type === 'birdLow' || o.type === 'birdHigh'){
+      drawBird(o);
+    } else {
+      rock(o.x, o.w, o.h);
+    }
+  }
+}
+function drawBird(o){
+  const bx = o.x + o.w / 2;
+  const by = GROUND_Y - (o.alt || 0) - o.h / 2 + Math.sin(bgTime * 6 + o.x * 0.01) * 3;
+  const flap = Math.sin(bgTime * 18 + o.x * 0.03) * 10;   // 扇翅膀
+  ctx.fillStyle = o.type === 'birdHigh' ? '#7f6df2' : '#4f87d6';   // 高空鸟是紫色的，提醒你别跳
+  ctx.beginPath(); ctx.ellipse(bx, by, 15, 10, 0, 0, TAU); ctx.fill();
+  ctx.beginPath();   // 翅膀
+  ctx.moveTo(bx - 2, by - 2);
+  ctx.lineTo(bx + 8, by - 12 - flap);
+  ctx.lineTo(bx + 13, by - 2);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#fff';   // 眼睛
+  ctx.beginPath(); ctx.arc(bx - 8, by - 3, 3, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#222';
+  ctx.beginPath(); ctx.arc(bx - 9, by - 3, 1.5, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#ffae3d';   // 嘴朝着玩家
+  ctx.beginPath();
+  ctx.moveTo(bx - 15, by - 2); ctx.lineTo(bx - 21, by); ctx.lineTo(bx - 15, by + 2);
+  ctx.closePath(); ctx.fill();
+}
+function drawItems(){
+  for(const it of items){
+    const bob = Math.sin(bgTime * 4 + it.phase) * 5;   // 上下漂浮
+    const col = POWER_INFO[it.type].color;
+    ctx.save();
+    ctx.translate(it.x, it.y + bob);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';   // 气泡底
+    ctx.beginPath(); ctx.arc(0, 0, 16, 0, TAU); ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(0, 0, 16, 0, TAU); ctx.stroke();
+    if(it.type === 'dash'){
+      ctx.fillStyle = col;   // 闪电
+      ctx.beginPath();
+      ctx.moveTo(2, -9); ctx.lineTo(-6, 2); ctx.lineTo(-1, 2);
+      ctx.lineTo(-2, 9); ctx.lineTo(6, -2); ctx.lineTo(1, -2);
+      ctx.closePath(); ctx.fill();
+    } else if(it.type === 'giant'){
+      ctx.fillStyle = col;   // 药水瓶
+      ctx.beginPath();
+      ctx.moveTo(-3, -9); ctx.lineTo(3, -9); ctx.lineTo(3, -4);
+      ctx.lineTo(7, 6); ctx.quadraticCurveTo(7, 9, 4, 9);
+      ctx.lineTo(-4, 9); ctx.quadraticCurveTo(-7, 9, -7, 6);
+      ctx.lineTo(-3, -4);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-4, -12, 8, 3);   // 瓶口
+    } else {
+      ctx.strokeStyle = col; ctx.lineWidth = 5;   // 马蹄形磁铁
+      ctx.beginPath(); ctx.arc(0, -2, 7, Math.PI, 0); ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.fillRect(-9.5, -2, 5, 8); ctx.fillRect(4.5, -2, 5, 8);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-9.5, 6, 5, 3); ctx.fillRect(4.5, 6, 5, 3);
+    }
+    ctx.restore();
+  }
+}
+function rock(x, w, h){
+  ctx.fillStyle = '#6e7d63';
+  rr(x, GROUND_Y - h, w, h, Math.min(8, w / 3)); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  rr(x + 3, GROUND_Y - h + 3, w * 0.4, h * 0.3, 3); ctx.fill();
+}
+
+function drawCoins(){
+  for(const c of coins){
+    const spin = Math.abs(Math.cos(bgTime * 5 + c.phase));   // 左右压缩模拟旋转
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.scale(Math.max(0.15, spin), 1);
+    ctx.fillStyle = '#d9a420';
+    ctx.beginPath(); ctx.arc(0, 0, 9, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#ffd34d';
+    ctx.beginPath(); ctx.arc(0, 0, 7, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fff3b0';
+    ctx.fillRect(-2, -4, 2, 8);
+    ctx.restore();
+  }
+}
+
+function drawPlayer(){
+  const p = player;
+  const ch = CHARS[save.char] || CHARS.fox;
+  ctx.save();
+  // 刚撞到障碍的短暂无敌期：闪烁提示
+  if(game.state === 'playing' && bgTime < invulnUntil){
+    ctx.globalAlpha = 0.45 + 0.35 * Math.sin(bgTime * 30);
+  }
+  ctx.translate(p.x + p.w / 2, p.y);   // 以脚底中心为基准
+  const gs = (power.type === 'giant') ? 1.6 : 1;   // 变大药水：整只放大
+  ctx.scale(p.sx * gs, p.sy * gs);     // 压扁/拉伸 × 巨大化
+  if(p.gliding) ctx.rotate(-0.12);     // 滑翔时身体微微前倾，更有飞行感
+  drawCharacter(ctx, ch, {
+    time: bgTime,
+    grounded: p.grounded,
+    swing: p.grounded ? Math.sin(p.phase) * 0.6 : 0,
+    gliding: p.gliding,
+    blinking: p.blinking,
+    dead: game.state === 'dead',
+    face: bgTime < face.until ? face.mood : '',
+    avatar: (save.useAvatar && avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) ? avatarImg : null,
+  });
+  ctx.restore();
+  // 空中剩余的连跳次数：头顶的小白点（还能跳几次就有几个点）
+  if(!p.grounded && ch.jumps > 1 && game.state === 'playing'){
+    const remain = ch.jumps - p.jumpsUsed;
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    for(let i = 0; i < remain; i++){
+      ctx.beginPath();
+      ctx.arc(p.x + p.w / 2 - (remain - 1) * 5 + i * 10, p.y - p.h * gs - 14, 3, 0, TAU);
+      ctx.fill();
+    }
+  }
+}
+
+/* —— 通用角色绘制：游戏里和商店预览共用同一套画法，保证"所见即所得" ——
+   c = 画到哪块画布，ch = CHARS 里的角色，o = 姿态参数（时间/着地/摆腿/滑翔/眨眼/死亡）
+   坐标系：原点在角色脚底中心，身体大约占 x -22~22、y -46~0 */
+function drawCharacter(c, ch, o){
+  const col = ch.c;
+  const t = o.time;
+  function crr(x, y, w, h, r){   // 这块画布自己的圆角矩形
+    r = Math.min(r, w / 2, h / 2);
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+  function tri(x1, y1, x2, y2, x3, y3){
+    c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.lineTo(x3, y3); c.closePath(); c.fill();
+  }
+  function legs(){
+    c.fillStyle = col.dark;
+    leg(-12, o.grounded ?  o.swing : -0.5);
+    leg(6,   o.grounded ? -o.swing :  0.7);
+  }
+  function leg(ox, sw){
+    c.save(); c.translate(ox, -10); c.rotate(sw * 0.7);
+    crr(-3, 0, 7, 11, 3); c.fill();
+    c.restore();
+  }
+  function body(round){
+    const g = c.createLinearGradient(0, -36, 0, 0);   // 上浅下深的渐变，更立体
+    g.addColorStop(0, col.body); g.addColorStop(1, col.body2);
+    c.fillStyle = g;
+    crr(-22, -36, 44, 28, round || 12); c.fill();
+    c.strokeStyle = 'rgba(0,0,0,0.16)'; c.lineWidth = 2;   // 描边让角色从背景里"跳"出来
+    crr(-22, -36, 44, 28, round || 12); c.stroke();
+  }
+  function belly(){
+    c.fillStyle = col.belly;
+    c.beginPath(); c.ellipse(2, -13, 12, 8, 0, 0, TAU); c.fill();
+  }
+  function eye(ex, ey){
+    if(o.dead){
+      c.strokeStyle = '#43281a'; c.lineWidth = 2.5;
+      c.beginPath();
+      c.moveTo(ex - 3.5, ey - 3); c.lineTo(ex + 3.5, ey + 3);
+      c.moveTo(ex + 3.5, ey - 3); c.lineTo(ex - 3.5, ey + 3);
+      c.stroke();
+    } else if(o.face === 'hurt'){
+      // 痛！眼睛挤成 "＞"，旁边飞出一滴冷汗
+      c.strokeStyle = '#43281a'; c.lineWidth = 2.5; c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(ex - 4, ey - 4); c.lineTo(ex + 3, ey); c.lineTo(ex - 4, ey + 4);
+      c.stroke();
+      c.fillStyle = 'rgba(110,170,255,0.95)';
+      c.beginPath();
+      c.moveTo(ex - 9, ey - 12);
+      c.quadraticCurveTo(ex - 5, ey - 9, ex - 8, ey - 6);
+      c.quadraticCurveTo(ex - 12, ey - 9, ex - 9, ey - 12);
+      c.fill();
+    } else if(o.face === 'joy'){
+      // 开心！眼睛弯成月牙，旁边冒小星星
+      c.strokeStyle = '#43281a'; c.lineWidth = 2.5; c.lineCap = 'round';
+      c.beginPath(); c.arc(ex, ey + 2, 4.5, Math.PI, TAU); c.stroke();
+      sparkle(ex + 9, ey - 10, 3);
+      sparkle(ex - 11, ey - 7, 2.2);
+    } else if(o.blinking > 0){
+      c.strokeStyle = '#43281a'; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(ex - 4, ey); c.lineTo(ex + 3, ey); c.stroke();
+    } else {
+      c.fillStyle = '#fff';
+      c.beginPath(); c.arc(ex, ey, 4.5, 0, TAU); c.fill();
+      c.fillStyle = '#2a1505';
+      c.beginPath(); c.arc(ex + 1.5, ey, 2.2, 0, TAU); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.9)';   // 一点高光，眼神更有灵气
+      c.beginPath(); c.arc(ex + 0.5, ey - 1.5, 1, 0, TAU); c.fill();
+    }
+  }
+  function sparkle(sx, sy, r){   // 四角小星星（开心特效用）
+    c.strokeStyle = '#ffd34d'; c.lineWidth = 1.8; c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(sx - r, sy); c.lineTo(sx + r, sy);
+    c.moveTo(sx, sy - r); c.lineTo(sx, sy + r);
+    c.stroke();
+  }
+  function scarfTails(){   // 飘在身后的围巾：滑翔时往上扬，平时随风摆
+    c.save();
+    c.translate(-14, -28);
+    c.rotate((o.gliding ? -0.7 : 0.15) + Math.sin(t * 7) * 0.14);
+    c.fillStyle = col.scarf;
+    crr(-22, -2, 22, 7, 3); c.fill();
+    c.rotate(0.3);
+    crr(-16, 3, 16, 6, 3); c.fill();
+    c.restore();
+  }
+  function scarfKnot(){    // 脖子后的围巾结，画在身体之上
+    c.fillStyle = col.scarf;
+    crr(-19, -33, 11, 9, 4); c.fill();
+  }
+
+  const wag = Math.sin(t * 9) * 0.25 + (o.grounded ? 0 : 0.45);
+
+  if(ch.kind === 'fox'){
+    // —— 狐狸（橙狐 / 雪狐）——
+    c.save();   // 大尾巴
+    c.translate(-19, -14);
+    c.rotate(-0.4 - wag * 0.5 + (o.gliding ? 0.45 : 0));
+    c.fillStyle = col.tail;
+    c.beginPath();
+    c.moveTo(0, 4); c.quadraticCurveTo(-20, 2, -24, -10); c.quadraticCurveTo(-10, -12, 0, -4);
+    c.closePath(); c.fill();
+    c.fillStyle = '#fff';
+    c.beginPath();
+    c.moveTo(-24, -10); c.quadraticCurveTo(-19, -12, -15, -9.5); c.quadraticCurveTo(-19, -6, -24, -10);
+    c.closePath(); c.fill();
+    c.restore();
+    scarfTails();
+    legs();
+    body();
+    scarfKnot();
+    belly();
+    c.fillStyle = col.body;   // 尖耳朵
+    tri(4, -34, 9, -46, 14, -33);
+    tri(13, -33, 18, -44, 22, -32);
+    c.fillStyle = col.ear;
+    tri(7, -35, 9.5, -41, 12, -35);
+    eye(12, -24);
+    c.fillStyle = '#5b2d0e';   // 鼻子
+    c.beginPath(); c.arc(21, -18, 2.5, 0, TAU); c.fill();
+  } else if(ch.kind === 'pig'){
+    // —— 小猪 ——
+    c.save();   // 卷卷的猪尾巴
+    c.translate(-21, -20);
+    c.strokeStyle = col.dark; c.lineWidth = 3.5; c.lineCap = 'round';
+    c.beginPath(); c.arc(-4, 0, 4.5, -0.5 + Math.sin(t * 6) * 0.2, 4.2); c.stroke();
+    c.restore();
+    scarfTails();
+    legs();
+    body(16);   // 更圆润
+    scarfKnot();
+    c.fillStyle = col.belly;
+    c.beginPath(); c.ellipse(0, -13, 13, 8, 0, 0, TAU); c.fill();
+    c.fillStyle = col.body;   // 耷拉的耳朵
+    tri(2, -33, 6, -45, 13, -32);
+    tri(12, -32, 17, -44, 22, -31);
+    c.fillStyle = col.dark;   // 耳朵尖
+    tri(4.5, -38, 6, -45, 9, -37);
+    eye(8, -25);
+    c.fillStyle = col.snout;   // 猪鼻子
+    c.beginPath(); c.ellipse(17, -20, 6.5, 5, 0, 0, TAU); c.fill();
+    c.strokeStyle = 'rgba(0,0,0,0.15)'; c.lineWidth = 1.5;
+    c.beginPath(); c.ellipse(17, -20, 6.5, 5, 0, 0, TAU); c.stroke();
+    c.fillStyle = col.dark;   // 鼻孔
+    c.beginPath(); c.arc(15, -20, 1.2, 0, TAU); c.fill();
+    c.beginPath(); c.arc(19.5, -20, 1.2, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(255,120,160,0.35)';   // 腮红
+    c.beginPath(); c.arc(4, -17, 3, 0, TAU); c.fill();
+  } else if(ch.kind === 'monkey'){
+    // —— 小猴 ——
+    c.strokeStyle = col.body; c.lineWidth = 5; c.lineCap = 'round';   // 甩来甩去的长尾巴
+    c.beginPath();
+    c.moveTo(-18, -12);
+    c.quadraticCurveTo(-34, -14, -31, -30 + Math.sin(t * 8) * 2);
+    c.stroke();
+    c.strokeStyle = col.dark; c.lineWidth = 4;
+    c.beginPath(); c.arc(-29, -32 + Math.sin(t * 8) * 2, 3.5, 0.5, 4.5); c.stroke();
+    scarfTails();
+    legs();
+    body();
+    scarfKnot();
+    belly();
+    c.fillStyle = col.body;   // 圆耳朵
+    c.beginPath(); c.arc(2, -35, 5.5, 0, TAU); c.fill();
+    c.fillStyle = col.face;
+    c.beginPath(); c.arc(2, -35, 3, 0, TAU); c.fill();
+    c.fillStyle = col.face;   // 浅色的口鼻
+    c.beginPath(); c.ellipse(15, -21, 8, 7, 0, 0, TAU); c.fill();
+    c.fillStyle = col.body;   // 头顶一撮呆毛
+    tri(10, -36, 13, -45, 16, -36);
+    eye(11, -26);
+    c.fillStyle = '#5b3a22';   // 鼻孔和笑嘴
+    c.beginPath(); c.arc(17, -21, 1.3, 0, TAU); c.fill();
+    c.strokeStyle = '#5b3a22'; c.lineWidth = 1.5;
+    c.beginPath(); c.arc(16, -18, 3, 0.2, Math.PI - 0.4); c.stroke();
+  } else if(ch.kind === 'dragon'){
+    // —— 小龙 ——
+    c.fillStyle = col.body2;   // 箭头尾巴
+    tri(-20, -14, -34, -8 + Math.sin(t * 7) * 2, -22, -22);
+    c.fillStyle = col.spike;
+    tri(-34, -8, -40, -4, -34, -14);
+    // 翅膀：平时小幅扇动，滑翔时完全张开
+    c.save();
+    c.translate(-4, -32);
+    c.rotate(o.gliding ? Math.sin(t * 5) * 0.1 - 0.5 : Math.sin(t * 14) * 0.25);
+    const ws = o.gliding ? 1.5 : 1;
+    c.scale(ws, ws);
+    c.fillStyle = col.wing;
+    c.beginPath();
+    c.moveTo(0, 0);
+    c.quadraticCurveTo(-16, -18, -28, -14);
+    c.quadraticCurveTo(-20, -6, -14, -4);
+    c.quadraticCurveTo(-8, -2, 0, 4);
+    c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(0,0,0,0.15)'; c.lineWidth = 1.5; c.stroke();
+    c.restore();
+    legs();
+    body();
+    c.fillStyle = col.belly;   // 肚皮鳞甲
+    crr(-8, -22, 22, 14, 7); c.fill();
+    c.fillStyle = col.spike;   // 背上的小刺
+    tri(-14, -36, -10, -44, -6, -36);
+    tri(-4, -37, 0, -46, 4, -37);
+    tri(6, -36, 10, -44, 14, -35);
+    c.fillStyle = '#fff';      // 小龙角
+    tri(14, -36, 18, -45, 21, -35);
+    eye(12, -24);
+    c.fillStyle = '#1f6b52';   // 鼻孔
+    c.beginPath(); c.arc(20, -19, 1.5, 0, TAU); c.fill();
+  }
+
+  // —— 真人头像模式：把照片裁成圆形"贴纸"盖在头上，表情画在照片周围 ——
+  if(o.avatar){
+    const hx = 11, hy = -31, hr = 15;
+    c.save();
+    c.beginPath(); c.arc(hx, hy, hr, 0, TAU); c.clip();
+    c.drawImage(o.avatar, hx - hr, hy - hr, hr * 2, hr * 2);
+    if(o.dead){   // 阵亡：照片蒙灰
+      c.fillStyle = 'rgba(90,90,100,0.55)';
+      c.fillRect(hx - hr, hy - hr, hr * 2, hr * 2);
+    }
+    c.restore();
+    c.strokeStyle = '#fff'; c.lineWidth = 2.5;   // 白色描边，像一张贴纸
+    c.beginPath(); c.arc(hx, hy, hr, 0, TAU); c.stroke();
+    if(o.dead){
+      c.strokeStyle = '#e84545'; c.lineWidth = 3; c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(hx - 8, hy - 8); c.lineTo(hx + 8, hy + 8);
+      c.moveTo(hx + 8, hy - 8); c.lineTo(hx - 8, hy + 8);
+      c.stroke();
+    } else if(o.face === 'hurt'){
+      // 漫画式"爆青筋"痛苦符号 + 冷汗
+      c.strokeStyle = '#ff5b5b'; c.lineWidth = 2.2; c.lineCap = 'round';
+      const ax = hx + hr - 2, ay = hy - hr + 2;
+      c.beginPath();
+      c.moveTo(ax - 4, ay); c.lineTo(ax + 4, ay);
+      c.moveTo(ax, ay - 4); c.lineTo(ax, ay + 4);
+      c.moveTo(ax - 3, ay - 3); c.lineTo(ax + 3, ay + 3);
+      c.moveTo(ax + 3, ay - 3); c.lineTo(ax - 3, ay + 3);
+      c.stroke();
+      c.fillStyle = 'rgba(110,170,255,0.95)';
+      c.beginPath();
+      c.moveTo(hx - hr, hy - 6);
+      c.quadraticCurveTo(hx - hr + 4, hy - 2, hx - hr + 1, hy + 1);
+      c.quadraticCurveTo(hx - hr - 3, hy - 2, hx - hr, hy - 6);
+      c.fill();
+    } else if(o.face === 'joy'){
+      sparkle(hx + hr + 3, hy - hr + 2, 3.5);
+      sparkle(hx - hr - 2, hy - 4, 2.5);
+      sparkle(hx + 2, hy - hr - 4, 2.5);
+    }
+  }
+}
+
+function drawParticles(){
+  for(const p of particles){
+    ctx.globalAlpha = 1 - p.life / p.max;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+  }
+  // 飘字
+  ctx.font = 'bold 15px ' + FONT;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for(const f of floats){
+    ctx.globalAlpha = 1 - f.life / 0.8;
+    ctx.fillStyle = f.color;
+    ctx.fillText(f.txt, f.x, f.y);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ========== 13. 界面文字 ========== */
+function drawHUD(){
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 4;
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 17px ' + FONT;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('得分 ' + game.score, 16, 14);
+  // 金币小图标 + 数量
+  ctx.fillStyle = '#ffd34d';
+  ctx.beginPath(); ctx.arc(24, 52, 7, 0, TAU); ctx.fill();
+  ctx.strokeStyle = '#d9a420'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.fillText('× ' + save.coins, 38, 44);   // 显示钱包总金币（攒着逛商店）
+  const coinW = ctx.measureText('× ' + save.coins).width;   // 趁字体还是 17px 先量好宽度
+  ctx.font = '12px ' + FONT;
+  ctx.fillStyle = '#ffe9c4';
+  ctx.fillText('钱包', 44 + coinW, 48);
+  ctx.font = 'bold 17px ' + FONT;
+  ctx.fillStyle = '#fff';
+  // 道具剩余时间条
+  if(power.type){
+    const info = POWER_INFO[power.type];
+    const frac = clamp((power.until - bgTime) / power.total, 0, 1);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(16, 76, 110, 9);
+    ctx.fillStyle = info.color;
+    ctx.fillRect(16, 76, 110 * frac, 9);
+    ctx.font = 'bold 12px ' + FONT;
+    ctx.fillText(info.name, 132, 74);
+    ctx.font = 'bold 17px ' + FONT;
+  }
+  // 最高分画在顶部正中：右上角两个按钮是 HTML 元素，窗口变窄时会盖住右对齐的文字
+  ctx.textAlign = 'center';
+  ctx.fillText('最高 ' + game.best, W / 2, 14);
+  ctx.restore();
+}
+
+function drawOverlay(){
+  if(game.state === 'playing' && !paused) return;
+  ctx.fillStyle = 'rgba(10,14,28,0.45)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+  if(paused && game.state === 'playing'){
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 30px ' + FONT;
+    ctx.fillText('已暂停', W / 2, H / 2 - 12);
+    ctx.font = '15px ' + FONT;
+    ctx.fillText('按 P 或 空格 继续', W / 2, H / 2 + 24);
+    return;
+  }
+  if(game.state === 'ready'){
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 42px ' + FONT;
+    ctx.fillText('狐狸快跑', W / 2, H / 2 - 46);
+    ctx.fillStyle = '#ffe9c4';
+    ctx.font = '17px ' + FONT;
+    ctx.fillText('按 空格 或 点击屏幕 开始', W / 2, H / 2 + 8);
+    ctx.fillStyle = '#aab6d0';
+    ctx.font = '14px ' + FONT;
+    ctx.fillText('撞障碍只扣 20 分，但地上的黑坑会要命——看到坑就跳！ · 紫色高空鸟：别跳', W / 2, H / 2 + 36);
+    ctx.fillText('吃道具变强 · 商店有会二连跳/三连跳/滑翔的新伙伴，金币攒起来！（按 B 逛逛）', W / 2, H / 2 + 58);
+  } else if(game.state === 'dead'){
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 34px ' + FONT;
+    ctx.fillText('游戏结束', W / 2, H / 2 - 52);
+    if(game.deathBy === 'pit'){
+      ctx.fillStyle = '#aab6d0';
+      ctx.font = '13px ' + FONT;
+      ctx.fillText('掉进坑里啦！看到坑要跳过去～', W / 2, H / 2 - 33);
+    }
+    ctx.fillStyle = '#ffd34d';
+    ctx.font = 'bold 21px ' + FONT;
+    ctx.fillText('得分 ' + game.score + (game.newBest ? '   🎉 新纪录！' : ''), W / 2, H / 2 - 14);
+    ctx.fillStyle = '#aab6d0';
+    ctx.font = '15px ' + FONT;
+    ctx.fillText('最高纪录 ' + game.best, W / 2, H / 2 + 14);
+    if(bgTime - game.deadAt > 0.45){
+      ctx.fillStyle = '#fff';
+      ctx.fillText('按 空格 / 点击屏幕 再来一次', W / 2, H / 2 + 44);
+    }
+  }
+}
+
+/* ========== 14. 渲染一帧 ========== */
+function render(){
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  // 屏幕震动：死亡瞬间整个画面抖几下
+  if(game.shake > 0.3){
+    ctx.translate(rand(-1, 1) * game.shake * 0.5, rand(-1, 1) * game.shake * 0.5);
+  }
+  const pal = skyPalette();
+  drawBackground(pal);
+  drawPits();
+  drawObstacles();
+  drawCoins();   // 金币画在障碍之后（也就是上层），万一和障碍重叠也看得见
+  drawItems();
+  drawParticles();
+  drawPlayer();
+  // 夜里给整个世界蒙一层淡淡的蓝
+  if(pal.night > 0.02){
+    ctx.fillStyle = 'rgba(10,16,42,' + (0.16 * pal.night) + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.restore();
+  drawHUD();
+  drawOverlay();
+}
+
+/* ========== 15. 商店 ========== */
+const shopEl = document.getElementById('shop');
+const shopList = document.getElementById('shopList');
+const shopCoinsEl = document.getElementById('shopCoins');
+// 货架：kind 为 char 的是角色（名字/能力/价格都在 CHARS 里），up 的是可升级项
+const SHOP_GOODS = [
+  { id: 'fox',     kind: 'char' },
+  { id: 'pig',     kind: 'char' },
+  { id: 'monkey',  kind: 'char' },
+  { id: 'snowfox', kind: 'char' },
+  { id: 'dragon',  kind: 'char' },
+  { id: 'dur', kind: 'up', name: '道具时长', desc: '每级让所有道具多持续 1.5 秒（最多 3 级）', prices: [100, 250, 500] },
+];
+function shopOpen(){ return !shopEl.classList.contains('hidden'); }
+function renderShop(){
+  shopCoinsEl.textContent = '💰 ' + save.coins;
+  let html = '';
+  for(const g of SHOP_GOODS){
+    let prev, info, btn;
+    if(g.kind === 'char'){
+      const ch = CHARS[g.id];
+      // 能力小徽章：几连跳 + 会不会滑翔
+      const chips = '<span class="chip">' + (ch.jumps === 1 ? '单跳' : ch.jumps + '连跳') + '</span>' +
+                    (ch.glide ? '<span class="chip chip-g">滑翔</span>' : '');
+      prev = '<canvas class="shop-prev" width="72" height="56" data-char="' + g.id + '"></canvas>';
+      info = '<b>' + ch.name + '</b>' + chips + '<small>' + ch.desc + '</small>';
+      if(save.char === g.id)             btn = '<button disabled>出战中</button>';
+      else if(save.chars.includes(g.id)) btn = '<button data-act="wear" data-id="' + g.id + '">出战</button>';
+      else                               btn = '<button data-act="buy" data-id="' + g.id + '">' + ch.price + ' 金币</button>';
+    } else {
+      prev = '<div class="shop-prev">⏱️</div>';
+      info = '<b>' + g.name + '</b><small>' + g.desc + '</small>';
+      if(save.durLevel >= g.prices.length) btn = '<button disabled>已满级</button>';
+      else btn = '<button data-act="up" data-id="' + g.id + '">升级 ' + g.prices[save.durLevel] + ' 金币</button>';
+      btn = '<span style="color:#97a1b8;font-size:12px;">Lv ' + save.durLevel + '/' + g.prices.length + '&nbsp;</span>' + btn;
+    }
+    html += '<div class="shop-row">' + prev +
+            '<div class="grow">' + info + '</div>' +
+            '<div>' + btn + '</div></div>';
+  }
+  // 真人头像专区
+  const avPrev = save.avatar
+    ? '<div class="shop-prev"><img src="' + save.avatar + '" alt="头像"></div>'
+    : '<div class="shop-prev">🤳</div>';
+  const avBtns =
+    '<button data-act="avatar-up">' + (save.avatar ? '换照片' : '上传照片') + '</button>' +
+    (save.avatar ? ' <button data-act="avatar-toggle">' + (save.useAvatar ? '摘下' : '戴上') + '</button>' : '');
+  html += '<div class="shop-row">' + avPrev +
+          '<div class="grow"><b>真人头像</b>' +
+          (save.useAvatar ? '<span class="chip chip-g">使用中</span>' : '') +
+          '<small>上传一张照片，角色的脑袋换成你！撞到、吃道具、阵亡都有专属表情</small></div>' +
+          '<div>' + avBtns + '</div></div>';
+  shopList.innerHTML = html;
+  // 记下所有预览画布，主循环会逐帧重画它们 → 货架上的小动物是活的！
+  shopPrevs = Array.from(shopList.querySelectorAll('canvas[data-char]'));
+  updateShopPreviews();
+}
+let shopPrevs = [];
+function updateShopPreviews(){
+  const t = performance.now() / 1000;   // 商店打开时游戏是暂停的，所以用真实时间驱动动画
+  for(const cv of shopPrevs) drawCharPreview(cv, cv.dataset.char, t);
+}
+// 在商店的小画布上画角色：原地小跑 + 偶尔眨眼（和游戏里同一套 drawCharacter）
+function drawCharPreview(cv, id, t){
+  const ch = CHARS[id] || CHARS.fox;
+  const c = cv.getContext('2d');
+  c.clearRect(0, 0, cv.width, cv.height);
+  c.save();
+  c.translate(40, 50);
+  c.scale(0.9, 0.9);
+  drawCharacter(c, ch, {
+    time: t,
+    grounded: true,
+    swing: Math.sin(t * 9) * 0.6,
+    gliding: false,
+    blinking: (t % 3) < 0.12 ? 1 : 0,
+    dead: false,
+  });
+  c.restore();
+}
+let lastBuyAt = 0;   // 连点保护：两次购买至少间隔 350 毫秒，防止手抖双击连买两级
+shopList.addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if(!b || b.disabled) return;
+  // 真人头像的两个按钮（不走货架逻辑）
+  if(b.dataset.act === 'avatar-up'){ document.getElementById('avatarFile').click(); return; }
+  if(b.dataset.act === 'avatar-toggle'){
+    save.useAvatar = !save.useAvatar;
+    saveSave(); renderShop();
+    return;
+  }
+  const g = SHOP_GOODS.find(x => x.id === b.dataset.id);
+  if(!g) return;
+  if(b.dataset.act === 'buy' || b.dataset.act === 'up'){
+    if(performance.now() - lastBuyAt < 350) return;
+    lastBuyAt = performance.now();
+  }
+  if(b.dataset.act === 'wear') save.char = g.id;
+  if(b.dataset.act === 'buy'){
+    const price = CHARS[g.id].price;
+    if(save.coins < price){ b.textContent = '金币不够！'; setTimeout(renderShop, 900); return; }
+    save.coins -= price; save.chars.push(g.id); save.char = g.id;
+    sfx.power();
+  }
+  if(b.dataset.act === 'up'){
+    const cost = g.prices[save.durLevel];
+    if(save.coins < cost){ b.textContent = '金币不够！'; setTimeout(renderShop, 900); return; }
+    save.coins -= cost; save.durLevel++;
+    sfx.power();
+  }
+  saveSave();
+  renderShop();
+});
+function toggleShop(show){
+  if(show){
+    if(game.state === 'playing') paused = true;   // 打开商店时自动暂停，逛完按 P 继续
+    renderShop();
+    shopEl.classList.remove('hidden');
+  } else {
+    shopEl.classList.add('hidden');
+  }
+}
+// 头像上传：读取照片 → 居中裁成正方形、缩到 128px → 存进存档
+document.getElementById('avatarFile').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const cv2 = document.createElement('canvas');
+      cv2.width = cv2.height = 128;
+      const c2 = cv2.getContext('2d');
+      const s = Math.min(img.width, img.height);   // 居中裁出正方形
+      c2.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 128, 128);
+      save.avatar = cv2.toDataURL('image/jpeg', 0.85);
+      save.useAvatar = true;
+      loadAvatarImg();
+      saveSave();
+      renderShop();
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(f);
+  e.target.value = '';   // 清空选择，下次选同一张照片也能触发
+});
+document.getElementById('shopBtn').addEventListener('click', function(){ ensureAudio(); toggleShop(true); this.blur(); });
+document.getElementById('shopClose').addEventListener('click', () => toggleShop(false));
+shopEl.addEventListener('pointerdown', e => { if(e.target === shopEl) toggleShop(false); });   // 点旁边暗处也能关
+
+/* ========== 16. 主循环 ========== */
+// 浏览器每秒大约调用 60 次 frame()，每次：算一小步物理 → 画一帧
+let last = performance.now();
+function frame(t){
+  // 限制单步时长：太长（卡顿）会瞬移穿墙；浏览器第一帧的时间戳偶尔会比加载时刻还早，
+  // 算出负数会让游戏时钟倒流直接崩溃，所以下限卡在 0
+  const dt = Math.max(0, Math.min((t - last) / 1000, 0.05));
+  last = t;
+  if(!paused) update(dt);
+  render();
+  if(shopOpen()) updateShopPreviews();   // 商店开着时，让货架上的小动物动起来
+  const pIcon = paused ? '▶️' : '⏸️';    // 暂停按钮的图标跟着状态变
+  if(pauseBtn.textContent !== pIcon) pauseBtn.textContent = pIcon;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
