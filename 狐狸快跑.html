@@ -1776,6 +1776,7 @@ function updatePlayer(dt){
     p.jumpsUsed = 0;                                   // 飞行结束后可以满状态连跳
     const targetY = 150 + Math.sin(bgTime * 3) * 12;
     p.y += (targetY - p.y) * Math.min(1, dt * 4);
+    if(p.x < 120) p.x = Math.min(120, p.x + 160 * dt);   // 飞行时也把偏掉的位置追回来
     p.vy = 0;
     p.phase += dt * 14;                                // 小腿快乐地划拉
     tickPlayerCosmetics(dt);
@@ -1821,6 +1822,8 @@ function updatePlayer(dt){
     } else {
       p.lastGrounded = bgTime;
       p.phase += dt * (game.speed / 22);   // 跑得越快腿摆得越快
+      // 掉坑自救会让人偏左：脚踏实地时小步跑回原位（不然跑得越久人越靠左）
+      if(p.x < 120) p.x = Math.min(120, p.x + 160 * dt);
       p.dustT -= dt;
       if(p.dustT <= 0){ puff(p.x + 8, GROUND_Y - 2); p.dustT = 0.09; }
     }
