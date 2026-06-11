@@ -82,28 +82,48 @@
   #homeBtn{ background: none !important; color: #97a1b8 !important; font-weight: normal !important; font-size: 13px !important; }
   #copyBtn{ background: #7df9ff; color: #04353a; }
   #copyBtn.hidden{ display: none; }
-  /* —— 主页大厅 —— */
+  /* —— 主页：全屏像素风主菜单 —— */
   #home{
     position: fixed; inset: 0; z-index: 9;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(8,12,24,.78);
+    background: #0d1024; overflow: hidden;
   }
   #home.hidden{ display: none; }
-  #homeCard{
-    background: rgba(22,28,42,.92); color: #fff; border-radius: 16px; text-align: center;
-    padding: 20px 26px; width: min(90vw, 400px);
-    box-shadow: 0 16px 60px rgba(0,0,0,.5);
+  #homeCanvas{
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    image-rendering: pixelated;   /* 低清画布放大 = 自带像素颗粒感 */
   }
-  #homeCard h1{ margin: 0 0 6px; font-size: 26px; }
-  #homeStats{ color: #aab6d0; font-size: 13px; margin-bottom: 12px; line-height: 1.7; }
+  #homeUI{
+    position: relative; z-index: 1; height: 100%; overflow-y: auto;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 8px; padding: 14px;
+  }
+  .homeSpacer{ height: 24vh; flex: none; }   /* 给画布上的像素标题留出舞台 */
+  #homeUI > *{ width: min(88vw, 380px); flex: none; }
+  #homeStats{
+    color: #c5cede; font-size: 13px; line-height: 1.7; text-align: center;
+    background: rgba(13,16,36,.8); border: 2px solid rgba(255,255,255,.14);
+    border-radius: 8px; padding: 8px 10px;
+  }
   #homeStart{
-    display: block; width: 100%; border: none; border-radius: 12px; padding: 14px;
-    background: #ffd34d; color: #4a3500; font-size: 19px; font-weight: bold; cursor: pointer;
+    border: 3px solid #3a2a00; border-radius: 8px; padding: 14px;
+    background: #ffd34d; color: #4a3500; font-size: 20px; font-weight: bold; cursor: pointer;
+    box-shadow: 0 5px 0 #3a2a00; text-align: center;
   }
-  #homeRow{ display: flex; gap: 8px; margin-top: 10px; }
+  #homeStart:active{ transform: translateY(4px); box-shadow: 0 1px 0 #3a2a00; }
+  #homeRow{ display: flex; gap: 8px; }
   #homeRow button{
-    flex: 1; border: none; border-radius: 10px; padding: 10px 4px;
-    background: rgba(255,255,255,.12); color: #dfe6f5; font-size: 13px; cursor: pointer;
+    flex: 1; border: 2px solid rgba(255,255,255,.25); border-radius: 8px; padding: 10px 4px;
+    background: rgba(13,16,36,.85); color: #dfe6f5; font-size: 13px; cursor: pointer;
+    box-shadow: 0 3px 0 rgba(0,0,0,.5);
+  }
+  #homeRow button:active{ transform: translateY(2px); box-shadow: none; }
+  /* —— 加载过场（透明背景：像素块自己负责遮挡） —— */
+  #loading{ position: fixed; inset: 0; z-index: 13; background: transparent; pointer-events: all; }
+  #loading.hidden{ display: none; }
+  #loadCanvas{ position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+  #loadTip{
+    position: absolute; left: 0; right: 0; bottom: 9%;
+    text-align: center; color: #7e879c; font-size: 14px;
   }
   #homeSign{ position: relative; }
   #signDot{
@@ -112,15 +132,15 @@
   }
   #signDot.hidden{ display: none; }
   #muteBtn svg, #shopBtn svg, #pauseBtn svg{ display: block; }
-  #homeNick{ color: #97a1b8; font-size: 12px; margin: -4px 0 10px; }
+  #homeNick{ color: #97a1b8; font-size: 12px; text-align: center; }
   #homeNick input{
     width: 110px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
     border-radius: 6px; color: #fff; padding: 3px 8px; font-size: 12px;
   }
-  #homeTasks{ margin-top: 10px; text-align: left; background: rgba(255,255,255,.05); border-radius: 10px; padding: 10px 12px; }
+  #homeTasks{ text-align: left; background: rgba(13,16,36,.8); border: 2px solid rgba(255,255,255,.14); border-radius: 8px; padding: 10px 12px; }
   #homeTasks .tline{ font-size: 12px; color: #c5cede; margin: 3px 0; display: flex; justify-content: space-between; }
   #homeTasks .tline.done{ color: #7fd89a; }
-  #homeBoosts{ margin-top: 10px; text-align: left; background: rgba(255,255,255,.05); border-radius: 10px; padding: 10px 12px; }
+  #homeBoosts{ text-align: left; background: rgba(13,16,36,.8); border: 2px solid rgba(255,255,255,.14); border-radius: 8px; padding: 10px 12px; }
   #homeBoosts .bTitle{ color: #97a1b8; font-size: 12px; margin-bottom: 6px; }
   #homeBoosts button{
     border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 7px 9px;
@@ -210,7 +230,7 @@
   }
   /* 手机竖屏：把整个游戏（和商店）旋转 90°——打开就是满屏大横屏，不用手动转手机 */
   @media (max-width: 920px) and (orientation: portrait){
-    #wrap, #shop, #avatarAsk, #home, #sign, #dead{
+    #wrap, #shop, #avatarAsk, #home, #sign, #dead, #loading{
       position: fixed; inset: auto; top: 0; left: 0;
       width: 100vh; height: 100vw;       /* 宽高互换（老浏览器的回退写法） */
       width: 100dvh; height: 100dvw;     /* dvh/dvw 会把浏览器工具栏算进去，更准 */
@@ -218,9 +238,10 @@
       transform-origin: top left;
       display: flex; align-items: center; justify-content: center;
     }
+    .homeSpacer{ height: 18vw; }   /* 旋转模式下"纵向"是 vw */
     /* 旋转之后弹窗的"纵向"其实是屏幕的短边——尺寸必须按父容器的百分比算，
        不能再用 vh（vh 指的还是竖屏的长边，会算出一个装不下的高度，把内容顶出屏幕） */
-    #shopCard, #avatarCard, #homeCard, #signCard, #deadCard{
+    #shopCard, #avatarCard, #signCard, #deadCard{
       max-height: 88%; width: min(76%, 460px);
       overflow-y: auto; -webkit-overflow-scrolling: touch;
     }
@@ -305,21 +326,28 @@
   </div>
 </div>
 
-<!-- 主页大厅：开始游戏前的"客厅" -->
+<!-- 主页：全屏像素风主菜单（独立场景页，不是浮层） -->
 <div id="home">
-  <div id="homeCard">
-    <h1>🦊 狐狸快跑</h1>
+  <canvas id="homeCanvas" width="320" height="180"></canvas>
+  <div id="homeUI">
+    <div class="homeSpacer"></div>
     <div id="homeStats"></div>
     <div id="homeNick">昵称 <input id="nickInput" maxlength="12" placeholder="神秘小狐狸"> <span style="color:#5b667e">会写进你的挑战链接</span></div>
-    <button id="homeStart">▶️ 开始游戏</button>
-    <div id="homeTasks"></div>
+    <button id="homeStart">▶ 开始游戏</button>
     <div id="homeRow">
       <button id="homeDaily">☀️ 今日挑战</button>
       <button id="homeShop">🛒 商店</button>
       <button id="homeSign">📅 签到<span id="signDot" class="hidden"></span></button>
     </div>
+    <div id="homeTasks"></div>
     <div id="homeBoosts"></div>
   </div>
+</div>
+
+<!-- 加载过场：像素风 LOADING -->
+<div id="loading" class="hidden">
+  <canvas id="loadCanvas" width="160" height="90"></canvas>
+  <div id="loadTip"></div>
 </div>
 
 <!-- 签到日历 -->
@@ -619,7 +647,7 @@ function stopBGM(){
 function loadSave(){
   const def = { coins: 0, gems: 0, char: 'fox', chars: ['fox'], durLevel: 0,
                 avatar: null, useAvatar: false, skippedAvatar: false,
-                mount: false, pet: false,
+                mount: false, pet: false, board: false, moth: false,
                 runs: 0, pitsSeen: 0, freeReviveUsed: false, nick: '',
                 lastLogin: '', streak: 0, daily: null, dailyRun: null,
                 bestDist: 0, lastBeat: '', skins: {}, skinOn: {} };
@@ -688,7 +716,7 @@ let distToCoin = 500;       // 还要跑多远生成下一串金币
 let invulnUntil = 0;        // 撞到障碍后的短暂无敌截止时刻（防止同一块石头每帧都扣分）
 
 /* —— 道具系统 —— */
-const POWER_DUR  = { dash: 4, giant: 7, magnet: 9, coinx2: 8, fly: 6 };   // 各道具的基础持续秒数
+const POWER_DUR  = { dash: 4, giant: 7, magnet: 9, coinx2: 8, fly: 6, slow: 5 };   // 各道具的基础持续秒数
 const POWER_INFO = {
   dash:   { name: '冲刺', color: '#ffd34d' },   // 高速狂奔，撞碎一切，顺带吸金币
   giant:  { name: '变大', color: '#c77dff' },   // 巨大化，横着撞碎障碍
@@ -696,10 +724,12 @@ const POWER_INFO = {
   coinx2: { name: '双倍金币', color: '#5ce1e6' },   // 期间每枚金币算两枚
   shield: { name: '护盾', color: '#8ecaff' },   // 挡下一次撞击（不占道具栏）
   fly:    { name: '飞行', color: '#ffa7e2' },   // 飞上天巡航：无敌 + 自带磁吸
+  slow:   { name: '时停', color: '#b0fc38' },   // 世界减速 45%，喘口气仔细操作
 };
 const power = { type: null, until: 0, total: 1 };   // 移动系道具槽（冲刺/变大/飞行 互斥）
 let magnetUntil = 0, magnetTotal = 1;   // 收益系：磁铁——独立计时，可与任何道具叠加
 let coinx2Until = 0, coinx2Total = 1;   // 收益系：双倍金币
+let slowUntil = 0, slowTotal = 1;       // 收益系：时停（世界慢下来）
 let goldStorm = false;                  // 组合技：冲刺 × 双倍金币 = ⚡黄金风暴
 const items = [];                                   // 场上漂浮的道具
 let distToItem = 2200;      // 还要跑多远出现下一个道具
@@ -750,6 +780,7 @@ function srange(a, b){ return a + srand() * (b - a); }
 let pendingSprint = 0;    // 开局冲刺的米数（0=没买）
 let pendingShield = false;
 let resumeUntil = 0;      // 暂停恢复的 3-2-1 倒计时（真实时间毫秒，0=没在倒计时）
+let mothUsed = false;     // 月光蝶救援本局是否已用过
 let boostDist = 0;        // 本局开局冲刺还要冲到的距离（像素）
 let curBgmTier = 0;       // 当前音乐段位（0/1/2，里程越远节奏越快）
 let curBiome = 0;         // 当前生物群系（0 草原 / 1 沙漠 / 2 雪夜），与音乐分段同步
@@ -892,6 +923,9 @@ const CHARS = {
   snowfox: { name:'雪狐飘飘', price:2600, jumps:2, glide:true, kind:'fox',
     desc:'二连跳 + 滑翔：空中按住跳跃键，像羽毛一样飘',
     c:{ body:'#f4f8fd', body2:'#d8e2ee', dark:'#b9c6d6', belly:'#ffffff', ear:'#8aa0b8', tail:'#dce6f2', scarf:'#7fb3ff' } },
+  panda: { name:'熊猫滚滚', price:3000, jumps:2, glide:false, kind:'panda', perk:'shield',
+    desc:'二连跳 + 每局开局自带一面护盾！',
+    c:{ body:'#f4f4f0', body2:'#dcdcd4', dark:'#2a2a2a', belly:'#ffffff', patch:'#2a2a2a', scarf:'#7fd89a' } },
   dragon: { name:'小龙腾腾', price:5000, jumps:3, glide:true, kind:'dragon',
     desc:'传说级！三连跳 + 滑翔，几乎就是在飞',
     c:{ body:'#5fd9ad', body2:'#2f9d7a', dark:'#2a8a6b', belly:'#d8ffe9', spike:'#ffd34d', wing:'#a9f0d6', scarf:'#ff8a5c' } },
@@ -925,6 +959,7 @@ function resetPlayer(){
 // "键盘长按大跳时，在别处点了一下鼠标，跳跃被莫名打断"这类怪事。
 let jumpHeld = null;
 function pressJump(source){
+  if(loadingStart) return;   // 加载过场中不接受操作
   ensureAudio();
   if(paused){
     if(!resumeUntil) resumeUntil = performance.now() + 1500;   // 不瞬间续跑：先 3-2-1
@@ -943,7 +978,7 @@ function pressJump(source){
   jumpHeld = source;
   // 空中连跳：角色还有剩余跳跃段数时，在空中按跳跃就直接再跳一次
   const ch = dailyMode ? CHARS.fox : (CHARS[save.char] || CHARS.fox);   // 日赛统一用橙狐裸跑，分数才可比
-  const maxJumps = ch.jumps + (save.mount && !dailyMode ? 1 : 0);   // 坐骑·筋斗云：所有角色额外 +1 段跳
+  const maxJumps = ch.jumps + ((save.mount || save.board) && !dailyMode ? 1 : 0);   // 坐骑：额外 +1 段跳
   if(!player.grounded && power.type !== 'fly' && bgTime - player.lastGrounded > COYOTE && player.jumpsUsed < maxJumps &&
      player.y < GROUND_Y + 26){   // 掉坑太深就救不回来了
     airJump();
@@ -966,11 +1001,12 @@ function releaseJump(source){
   if(game.state === 'playing' && player.vy < JUMP_CUT) player.vy = JUMP_CUT;
 }
 window.addEventListener('keydown', e => {
-  if(homeOpen() && game.state === 'ready'){   // 主页大厅：空格/回车 = 开始游戏
+  if(loadingStart) return;   // 加载过场中不响应按键
+  if(homeOpen() && game.state === 'ready'){   // 主页：空格/回车 = 开始游戏
     if(e.code === 'Space' || e.code === 'Enter'){
       e.preventDefault();
       homeEl.classList.add('hidden');
-      startGame();
+      startLoading(() => startGame());
     }
     return;
   }
@@ -1042,17 +1078,19 @@ function startGame(){
   game.startBest = game.best; game.recordShown = false;
   bonusUntil = 0; nextBonusAt = 25; reviveCount = 0; shieldOn = false;
   bonusCount = 0; bonusKind = 0; magnetUntil = 0; coinx2Until = 0; goldStorm = false;
-  patQueue = []; nextMeteorAt = 5000; game.milestone = 0;
+  patQueue = []; nextMeteorAt = 5000; game.milestone = 0; mothUsed = false; slowUntil = 0;
   bunny = null; distToBunny = 6000 + Math.random() * 4000;
   banner.until = 0; petPulseAt = 0; petPulseUntil = 0;
   recordFlagShown = false; curBgmTier = 0;
   // 出发加成：在主页买好的 buff 这一局生效（日赛不可用，保证公平）
   boostDist = 0;
   if(!dailyMode){
-    if(pendingSprint > 0){
-      boostDist = pendingSprint * 12;
+    if((CHARS[save.char] || {}).perk === 'shield') shieldOn = true;   // 熊猫滚滚：天生自带护盾
+    const sprint = Math.max(pendingSprint, save.board ? 200 : 0);     // 火箭滑板：每局免费冲刺 200 米
+    if(sprint > 0){
+      boostDist = sprint * 12;
       activatePower('dash');
-      showBanner('🚀 开局冲刺 ' + pendingSprint + ' 米！', 2, '#ffd34d');
+      showBanner('🚀 开局冲刺 ' + sprint + ' 米！', 2, '#ffd34d');
       pendingSprint = 0;
     }
     if(pendingShield){ shieldOn = true; pendingShield = false; }
@@ -1405,7 +1443,7 @@ function spawnItem(){
   for(const o of obstacles){
     if((o.alt || o.type === 'pendulum') && o.x > W - 420){ distToItem = 250; return; }
   }
-  const types = ['dash', 'giant', 'magnet', 'coinx2', 'shield', 'fly'];
+  const types = ['dash', 'giant', 'magnet', 'coinx2', 'shield', 'fly', 'slow'];
   items.push({
     x: W + 60,
     y: srange(140, 170),   // 和金币同一条安全线：永远悬在最高障碍之上，不"诱人送死"
@@ -1433,6 +1471,13 @@ function activatePower(type){
     coinx2Until = bgTime + coinx2Total;
     setFace('joy', 1.2); sfx.power();
     floatText(player.x + player.w / 2, player.y - player.h - 24, '双倍金币！', POWER_INFO.coinx2.color);
+    return;
+  }
+  if(type === 'slow'){
+    slowTotal = POWER_DUR.slow + save.durLevel * 1.5;
+    slowUntil = bgTime + slowTotal;
+    setFace('joy', 1.2); sfx.power();
+    floatText(player.x + player.w / 2, player.y - player.h - 24, '时停！', POWER_INFO.slow.color);
     return;
   }
   power.type = type;
@@ -1498,7 +1543,7 @@ function update(dt){
 
   game.speed = Math.min(SPEED_MAX, game.speed + SPEED_RAMP * dt);
   // 冲刺道具生效时世界加速 1.8 倍（相对地，就是狐狸在狂奔）
-  const move = game.speed * dashMult() * dt;
+  const move = game.speed * dashMult() * (bgTime < slowUntil ? 0.55 : 1) * dt;   // 时停：世界慢 45%
   game.dist += move; game.runDist += move;
 
   const inBonus = bgTime < bonusUntil;   // 超级奖励时间：没有任何危险，只有漫天金币
@@ -1810,6 +1855,15 @@ function updatePlayer(dt){
       sfx.land();
       puff(p.x + 10, GROUND_Y - 2); puff(p.x + p.w - 10, GROUND_Y - 2);
     } else if(p.y >= GROUND_Y){
+      // 月光蝶：每局一次，掉坑瞬间救回空中
+      if(save.moth && !mothUsed && !dailyMode){
+        mothUsed = true;
+        p.vy = -760; p.jumpsUsed = 0; p.inPit = false;
+        showBanner('🦋 月光蝶救援！', 1.8, '#d9b8ff');
+        burst(p.x + p.w / 2, p.y - 10, 14, ['#d9b8ff', '#ffffff']);
+        sfx.power();
+        return;
+      }
       // 正在坑里下坠：跟着世界一起往左滑，看起来就是掉进了洞里。
       // 标记"已坠坑"——就算坑随后滑出屏幕被清理掉，也不能凭空落地（之前的 bug）
       p.inPit = true;
@@ -2160,6 +2214,12 @@ function drawItems(){
       ctx.font = 'bold 11px ' + FONT;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('×2', 7, 1);
+    } else if(it.type === 'slow'){
+      ctx.strokeStyle = col; ctx.lineWidth = 2.5;   // 时停怀表
+      ctx.beginPath(); ctx.arc(0, 0, 9, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -6); ctx.moveTo(0, 0); ctx.lineTo(4, 2); ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.fillRect(-2, -13, 4, 3);
     } else if(it.type === 'fly'){
       ctx.fillStyle = col;   // 一对小翅膀
       ctx.beginPath(); ctx.ellipse(-5, 0, 8, 4, -0.5, 0, TAU); ctx.fill();
@@ -2233,14 +2293,35 @@ function drawCoins(){
 function drawPlayer(){
   const p = player;
   const ch = dailyMode ? CHARS.fox : (CHARS[save.char] || CHARS.fox);
-  // 坐骑·筋斗云：一朵跟着跑的小白云（画在角色身后）
-  if(save.mount && !dailyMode){
+  // 坐骑（画在角色身后）：火箭滑板优先于筋斗云
+  if(save.board && !dailyMode){
+    ctx.fillStyle = '#ff7847';
+    rr(p.x - 4, p.y - 1, 52, 7, 4); ctx.fill();
+    ctx.fillStyle = '#ffd34d';
+    rr(p.x - 4, p.y - 1, 52, 2, 1); ctx.fill();
+    ctx.fillStyle = 'rgba(255,170,60,' + (0.5 + 0.4 * Math.sin(bgTime * 24)) + ')';   // 尾焰
+    ctx.beginPath();
+    ctx.moveTo(p.x - 4, p.y + 2); ctx.lineTo(p.x - 18 - Math.sin(bgTime * 24) * 5, p.y + 3); ctx.lineTo(p.x - 4, p.y + 5);
+    ctx.closePath(); ctx.fill();
+  } else if(save.mount && !dailyMode){
     ctx.fillStyle = 'rgba(255,255,255,0.92)';
     ctx.beginPath();
     ctx.ellipse(p.x + p.w / 2,      p.y + 3, 26, 9, 0, 0, TAU);
     ctx.ellipse(p.x + p.w / 2 - 16, p.y + 5, 14, 6, 0, 0, TAU);
     ctx.ellipse(p.x + p.w / 2 + 16, p.y + 5, 14, 6, 0, 0, TAU);
     ctx.fill();
+  }
+  // 精灵·月光蝶：粉紫色小蝴蝶绕着飞
+  if(save.moth && !dailyMode){
+    const mx = p.x + p.w + 18 + Math.sin(bgTime * 2.2) * 6, my2 = p.y - p.h - 14 + Math.cos(bgTime * 3) * 8;
+    const fl = Math.sin(bgTime * 20) * 0.6;
+    ctx.fillStyle = '#d9b8ff';
+    ctx.save(); ctx.translate(mx, my2);
+    ctx.beginPath(); ctx.ellipse(-4, 0, 5, 3, -0.6 + fl, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(4, 0, 5, 3, 0.6 - fl, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#9b59d0';
+    ctx.fillRect(-1, -3, 2, 6);
+    ctx.restore();
   }
   // 飞行道具：背后一对快速扇动的小翅膀
   if(power.type === 'fly'){
@@ -2297,7 +2378,7 @@ function drawPlayer(){
     ctx.beginPath(); ctx.arc(px2 - 1.5, py2 - 1.5, 2, 0, TAU); ctx.fill();
   }
   // 空中剩余的连跳次数：头顶的小白点（还能跳几次就有几个点）
-  const maxJumps = ch.jumps + (save.mount && !dailyMode ? 1 : 0);
+  const maxJumps = ch.jumps + ((save.mount || save.board) && !dailyMode ? 1 : 0);
   if(!p.grounded && maxJumps > 1 && game.state === 'playing'){
     const remain = maxJumps - p.jumpsUsed;
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
@@ -2493,6 +2574,20 @@ function drawCharacter(c, ch, o){
     c.beginPath(); c.arc(17, -21, 1.3, 0, TAU); c.fill();
     c.strokeStyle = '#5b3a22'; c.lineWidth = 1.5;
     c.beginPath(); c.arc(16, -18, 3, 0.2, Math.PI - 0.4); c.stroke();
+  } else if(ch.kind === 'panda'){
+    // —— 大熊猫：黑耳朵黑眼圈，国宝亲自跑酷 ——
+    scarfTails();
+    legs();
+    body(16);
+    scarfKnot();
+    belly();
+    c.fillStyle = col.patch;   // 圆黑耳朵
+    c.beginPath(); c.arc(4, -38, 6, 0, TAU); c.fill();
+    c.beginPath(); c.arc(19, -36, 6, 0, TAU); c.fill();
+    c.beginPath(); c.ellipse(12, -25, 6, 7, 0.3, 0, TAU); c.fill();   // 黑眼圈
+    eye(12, -25);
+    c.fillStyle = col.patch;   // 鼻子
+    c.beginPath(); c.arc(21, -17, 2.5, 0, TAU); c.fill();
   } else if(ch.kind === 'dragon'){
     // —— 小龙 ——
     c.fillStyle = col.body2;   // 箭头尾巴
@@ -2652,6 +2747,7 @@ function drawHUD(){
   if(power.type) drawPBar(POWER_INFO[power.type].name, POWER_INFO[power.type].color, (power.until - bgTime) / power.total);
   if(bgTime < magnetUntil) drawPBar('磁铁', POWER_INFO.magnet.color, (magnetUntil - bgTime) / magnetTotal);
   if(bgTime < coinx2Until) drawPBar('双倍金币', POWER_INFO.coinx2.color, (coinx2Until - bgTime) / coinx2Total);
+  if(bgTime < slowUntil) drawPBar('时停', POWER_INFO.slow.color, (slowUntil - bgTime) / slowTotal);
   // 最高分画在顶部正中：右上角的按钮是 HTML 元素，窗口变窄时会盖住右对齐的文字
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 17px ' + FONT;
@@ -2685,9 +2781,9 @@ function drawOverlay(){
   if(paused && game.state === 'playing'){
     ctx.fillStyle = '#fff';
     if(resumeUntil){   // 3-2-1：让玩家看清自己和障碍的位置再开跑
-      const cnt = Math.ceil((resumeUntil - performance.now()) / 500);
+      const cnt = Math.min(3, Math.max(1, Math.ceil((resumeUntil - performance.now()) / 500)));
       ctx.font = 'bold 64px ' + FONT;
-      ctx.fillText(String(Math.max(1, cnt)), W / 2, H / 2);
+      ctx.fillText(String(cnt), W / 2, H / 2);
     } else {
       ctx.font = 'bold 30px ' + FONT;
       ctx.fillText('已暂停', W / 2, H / 2 - 12);
@@ -2770,6 +2866,7 @@ const SHOP_GOODS = [
   { id: 'pig',     kind: 'char' },
   { id: 'monkey',  kind: 'char' },
   { id: 'snowfox', kind: 'char' },
+  { id: 'panda',   kind: 'char' },
   { id: 'dragon',  kind: 'char' },
   { id: 'dur', kind: 'up', name: '道具时长', desc: '每级让所有道具多持续 1.5 秒（最多 3 级）', prices: [100, 250, 500] },
 ];
@@ -2781,6 +2878,12 @@ function renderShop(){
   document.getElementById('tabSkin').classList.toggle('active', shopTab === 'skin');
   let html = '';
   if(shopTab === 'coin'){
+  // 🎰 幸运抽奖：金币消耗的惊喜口（能抽到稀有角色！）
+  html += '<div class="shop-row"><div class="shop-prev">🎰</div>' +
+          '<div class="grow"><b>幸运抽奖</b><small>' +
+          (lastGachaMsg || '150💰 抽一次：金币 / 💎 / 免费冲刺券 / 皮肤，还有小概率直接抽中稀有角色！') +
+          '</small></div>' +
+          '<div><button data-act="gacha" class="' + (save.coins < 150 ? 'cant' : '') + '">150 💰</button></div></div>';
   for(const g of SHOP_GOODS){
     let prev, info, btn;
     if(g.kind === 'char'){
@@ -2821,8 +2924,10 @@ function renderShop(){
   html += '<div class="shop-row"><div class="shop-prev">🐰</div>' +
           '<div class="grow"><b>怎么获得钻石？</b><small>路上偶尔出现背着钻石的小兔子——跳起来扑住它就 +1 💎（未来会有更多获取方式）</small></div></div>';
   const gemGoods = [
-    { id: 'mount', name: '坐骑·筋斗云', desc: '脚踩白云：所有角色额外 +1 段跳！（镇店之宝）', emoji: '☁️', cost: 25 },
-    { id: 'pet',   name: '精灵·星宝',   desc: '飘在身边的小精灵，每 8 秒自动帮你吸一波金币', emoji: '🧚', cost: 12 },
+    { id: 'mount', name: '坐骑·筋斗云',   desc: '脚踩白云：所有角色额外 +1 段跳！', emoji: '☁️', cost: 25 },
+    { id: 'board', name: '坐骑·火箭滑板', desc: '+1 段跳，并且每局免费开局冲刺 200 米！', emoji: '🛹', cost: 40 },
+    { id: 'pet',   name: '精灵·星宝',     desc: '飘在身边的小精灵，每 8 秒自动帮你吸一波金币', emoji: '🧚', cost: 12 },
+    { id: 'moth',  name: '精灵·月光蝶',   desc: '每局一次：掉坑的瞬间把你救回空中！', emoji: '🦋', cost: 18 },
   ];
   for(const g2 of gemGoods){
     const btn2 = save[g2.id]
@@ -2882,6 +2987,7 @@ function drawCharPreview(cv, id, t){
   c.restore();
 }
 let lastBuyAt = 0;   // 连点保护：两次购买至少间隔 350 毫秒，防止手抖双击连买两级
+let lastGachaMsg = '';   // 上一次抽奖结果（显示在抽奖行里）
 shopList.addEventListener('click', e => {
   const b = e.target.closest('button');
   if(!b || b.disabled) return;
@@ -2889,6 +2995,46 @@ shopList.addEventListener('click', e => {
   if(b.dataset.act === 'avatar-up'){ document.getElementById('avatarFile').click(); return; }
   if(b.dataset.act === 'avatar-toggle'){
     save.useAvatar = !save.useAvatar;
+    saveSave(); renderShop();
+    return;
+  }
+  // 🎰 抽奖
+  if(b.dataset.act === 'gacha'){
+    if(performance.now() - lastBuyAt < 600) return;
+    lastBuyAt = performance.now();
+    if(save.coins < 150){ b.textContent = '金币不够！'; setTimeout(renderShop, 900); return; }
+    save.coins -= 150;
+    const roll = Math.random();
+    let msg;
+    const unownedChars = Object.keys(CHARS).filter(id => !save.chars.includes(id));
+    const unownedSkins = [];
+    for(const cid in SKINS2) for(const sk of SKINS2[cid]) if(!(save.skins[cid] || []).includes(sk.id)) unownedSkins.push({ cid, sk });
+    if(roll < 0.06 && unownedChars.length){          // 6% 大奖：直接抽中新角色！
+      const cid = unownedChars[Math.floor(Math.random() * unownedChars.length)];
+      save.chars.push(cid); save.char = cid;
+      msg = '🎊🎊 抽中稀有角色：' + CHARS[cid].name + '！已自动出战';
+      sfx.power(); setTimeout(() => sfx.power(), 250);
+    } else if(roll < 0.18 && unownedSkins.length){   // 12% 皮肤
+      const pick = unownedSkins[Math.floor(Math.random() * unownedSkins.length)];
+      (save.skins[pick.cid] = save.skins[pick.cid] || []).push(pick.sk.id);
+      save.skinOn[pick.cid] = pick.sk.id;
+      msg = '🎉 抽中皮肤：' + CHARS[pick.cid].name + '·' + pick.sk.name;
+      sfx.power();
+    } else if(roll < 0.30){                          // 12% 钻石
+      save.gems += 1;
+      msg = '💎 钻石 ×1';
+      sfx.power();
+    } else if(roll < 0.52){                          // 22% 免费冲刺券
+      pendingSprint = Math.max(pendingSprint, 500);
+      msg = '🚀 免费开局冲刺 500 米券（下一局自动生效）';
+      sfx.power();
+    } else {                                         // 48% 金币（有赔有赚）
+      const c2 = 60 + Math.floor(Math.random() * 220);
+      save.coins += c2;
+      msg = '💰 金币 ×' + c2;
+      sfx.coin();
+    }
+    lastGachaMsg = '🎉 上次抽中：' + msg;
     saveSave(); renderShop();
     return;
   }
@@ -2914,7 +3060,7 @@ shopList.addEventListener('click', e => {
   }
   // 钻石商品（坐骑/精灵）
   if(b.dataset.act === 'gem-buy'){
-    const gemCosts = { mount: 25, pet: 12 };
+    const gemCosts = { mount: 25, board: 40, pet: 12, moth: 18 };
     const gid = b.dataset.id, gcost = gemCosts[gid];
     if(performance.now() - lastBuyAt < 350) return;
     lastBuyAt = performance.now();
@@ -3117,6 +3263,93 @@ document.getElementById('homeBoosts').addEventListener('click', e => {
   saveSave(); renderHome();
 });
 const deadEl = document.getElementById('dead');
+/* —— 主页像素场景：低清画布 + 放大 = 像素风（夜空/星星/奔跑的角色/大标题） —— */
+const homeCv = document.getElementById('homeCanvas');
+const hctx = homeCv.getContext('2d');
+const homeStars = [];
+for(let i = 0; i < 42; i++){
+  homeStars.push({ x: Math.random() * 320, y: Math.random() * 95, s: Math.random() < 0.25 ? 2 : 1, tw: Math.random() * TAU });
+}
+let homeScroll = 0;
+function drawHomeScene(){
+  const t = performance.now() / 1000;
+  homeScroll += 0.7;
+  hctx.fillStyle = '#0d1024'; hctx.fillRect(0, 0, 320, 180);     // 夜空
+  hctx.fillStyle = '#141a36'; hctx.fillRect(0, 96, 320, 84);
+  for(const s of homeStars){                                      // 像素星星
+    hctx.globalAlpha = 0.35 + 0.65 * Math.abs(Math.sin(t * 1.5 + s.tw));
+    hctx.fillStyle = '#fff';
+    hctx.fillRect(s.x | 0, s.y | 0, s.s, s.s);
+  }
+  hctx.globalAlpha = 1;
+  hctx.fillStyle = '#ffe9b0';                                     // 像素月亮
+  hctx.fillRect(262, 22, 14, 14); hctx.fillRect(258, 26, 22, 6); hctx.fillRect(266, 18, 6, 22);
+  hctx.fillStyle = '#10162e';                                     // 远山剪影
+  hctx.beginPath(); hctx.moveTo(0, 150); hctx.lineTo(60, 104); hctx.lineTo(130, 150); hctx.closePath(); hctx.fill();
+  hctx.beginPath(); hctx.moveTo(90, 150); hctx.lineTo(180, 92); hctx.lineTo(280, 150); hctx.closePath(); hctx.fill();
+  hctx.beginPath(); hctx.moveTo(230, 150); hctx.lineTo(300, 112); hctx.lineTo(360, 150); hctx.closePath(); hctx.fill();
+  hctx.fillStyle = '#1c2447'; hctx.fillRect(0, 150, 320, 30);     // 地面
+  hctx.fillStyle = '#2c376a';
+  for(let x = -(homeScroll % 26); x < 320; x += 26) hctx.fillRect(x | 0, 156, 10, 3);
+  hctx.save();                                                    // 奔跑的当前角色（戴头像也会显示）
+  hctx.translate(64, 150); hctx.scale(0.85, 0.85);
+  drawCharacter(hctx, CHARS[save.char] || CHARS.fox, {
+    time: t, grounded: true, swing: Math.sin(t * 10) * 0.65, gliding: false,
+    blinking: (t % 3) < 0.12 ? 1 : 0, dead: false,
+    pal: charC(save.char in CHARS ? save.char : 'fox'),
+    avatar: (save.useAvatar && avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) ? avatarImg : null,
+  });
+  hctx.restore();
+  hctx.textAlign = 'center'; hctx.textBaseline = 'top';           // 大标题（低清放大自带像素感）
+  hctx.font = 'bold 38px sans-serif';
+  hctx.fillStyle = '#3a2a00'; hctx.fillText('狐狸快跑', 163, 27);
+  hctx.fillStyle = '#ffd34d'; hctx.fillText('狐狸快跑', 160, 24);
+  hctx.font = 'bold 9px monospace';
+  hctx.fillStyle = '#7e879c'; hctx.fillText('- F O X　R U N -', 160, 66);
+}
+/* —— 加载过场：星际穿越线 + 狂奔剪影 + 像素进度条 —— */
+const loadEl = document.getElementById('loading');
+const lctx = document.getElementById('loadCanvas').getContext('2d');
+const LOAD_COVER = 750, LOAD_REVEAL = 750;   // 像素块合拢 / 揭开 的时长
+const LOAD_TIPS = ['提示：长按跳得更高', '提示：紫色高空鸟——千万别跳！', '提示：黑坑会摔死，看到就跳',
+                   '提示：金币攒够会进入超级奖励关', '提示：钻石兔要跳起来扑住', '提示：冲刺时可以撞碎一切',
+                   '提示：连跳角色掉坑瞬间还能自救'];
+let loadingStart = 0, loadingCb = null, loadingMidFired = false;
+// 像素块网格：20×12 个 8px 方块，按"离边缘的圈数"排好入场顺序（PPT 棋盘式）
+const loadTiles = [];
+for(let cx2 = 0; cx2 < 20; cx2++){
+  for(let cy2 = 0; cy2 < 12; cy2++){
+    loadTiles.push({ cx: cx2, cy: cy2, ring: Math.min(cx2, cy2, 19 - cx2, 11 - cy2), j: Math.random() * 60 });
+  }
+}
+function startLoading(cb){
+  loadingStart = performance.now();
+  loadingMidFired = false;
+  loadingCb = cb;
+  document.getElementById('loadTip').textContent = LOAD_TIPS[Math.floor(Math.random() * LOAD_TIPS.length)];
+  loadEl.classList.remove('hidden');
+}
+function drawLoading(){
+  const el = performance.now() - loadingStart;
+  lctx.clearRect(0, 0, 160, 90);
+  for(const tl of loadTiles){
+    let k;   // 这块砖当前的大小（0=没出现 1=完全盖住）
+    if(el < LOAD_COVER){           // 合拢：从四周一圈圈往中心盖
+      k = clamp((el - tl.ring * 70 - tl.j) / 160, 0, 1);
+    } else {                       // 揭开：同样从四周一圈圈消失，露出游戏
+      k = 1 - clamp((el - LOAD_COVER - tl.ring * 70 - tl.j) / 160, 0, 1);
+    }
+    if(k <= 0) continue;
+    const s = 8 * k;
+    lctx.fillStyle = (tl.cx + tl.cy) % 2 ? '#0d1024' : '#05060f';
+    lctx.fillRect(tl.cx * 8 + (8 - s) / 2, tl.cy * 8 + (8 - s) / 2, s, s);
+  }
+  if(el >= LOAD_COVER * 0.55 && el <= LOAD_COVER + 250){   // 盖满的瞬间打出标语
+    lctx.font = 'bold 11px monospace'; lctx.textAlign = 'center'; lctx.textBaseline = 'middle';
+    lctx.fillStyle = '#ffd34d';
+    lctx.fillText('R E A D Y', 80, 44);
+  }
+}
 // 把这一局的结算信息填进 DOM 卡片
 function updateDeadCard(){
   const finish = dailyMode && game.deathBy === 'finish';
@@ -3172,12 +3405,12 @@ document.getElementById('againBtn').addEventListener('click', function(){
 document.getElementById('homeStart').addEventListener('click', function(){
   ensureAudio();
   homeEl.classList.add('hidden');
-  startGame();
+  startLoading(() => startGame());
 });
 document.getElementById('homeDaily').addEventListener('click', function(){
   ensureAudio();
   homeEl.classList.add('hidden');
-  startDaily();
+  startLoading(() => startDaily());
 });
 document.getElementById('homeShop').addEventListener('click', function(){ ensureAudio(); toggleShop(true); });
 document.getElementById('homeSign').addEventListener('click', function(){
@@ -3227,6 +3460,22 @@ function frame(t){
   if(!paused) update(dt);
   render();
   if(shopOpen()) updateShopPreviews();   // 商店开着时，让货架上的小动物动起来
+  if(homeOpen()) drawHomeScene();        // 主页像素场景常驻动画
+  if(loadingStart){                       // 加载过场：合拢→开局→揭开→3·2·1
+    drawLoading();
+    const lel = performance.now() - loadingStart;
+    if(!loadingMidFired && lel >= LOAD_COVER){
+      loadingMidFired = true;
+      const cb = loadingCb; loadingCb = null;
+      if(cb) cb();                         // 屏幕全黑的这一刻切到游戏
+      paused = true;                       // 揭开期间数 3·2·1，倒数完才开跑
+      resumeUntil = performance.now() + LOAD_REVEAL + 1500;
+    }
+    if(lel >= LOAD_COVER + LOAD_REVEAL + 120){
+      loadingStart = 0;
+      loadEl.classList.add('hidden');
+    }
+  }
   const pIcon = paused ? 'play' : 'pause';   // 暂停按钮的图标跟着状态变
   if(pauseBtn.dataset.icon !== pIcon){
     pauseBtn.dataset.icon = pIcon;
