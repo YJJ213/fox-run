@@ -88,6 +88,14 @@
     body{ overflow: hidden; }   /* 手机上禁止页面被拖来拖去 */
     #tip{ display: none; }      /* 操作说明游戏里都有，不占屏幕 */
     #game{ border-radius: 0; }
+    /* 小屏幕上商店排得更紧凑，一屏能装下更多内容 */
+    #shopCard{ padding: 12px 14px; }
+    #shopCard h2{ font-size: 17px; }
+    .shop-prev{ width: 56px; height: 44px; font-size: 20px; }
+    .shop-row{ padding: 7px 0; gap: 8px; }
+    .shop-row b{ font-size: 14px; }
+    .shop-row small{ font-size: 12px; }
+    #avatarCard{ max-height: 86vh; overflow-y: auto; }
   }
   /* 手机横屏：游戏铺满整个屏幕 */
   @media (max-width: 920px) and (orientation: landscape){
@@ -103,6 +111,12 @@
       transform-origin: top left;
       display: flex; align-items: center; justify-content: center;
     }
+    /* 旋转之后弹窗的"纵向"其实是屏幕的短边——尺寸必须按父容器的百分比算，
+       不能再用 vh（vh 指的还是竖屏的长边，会算出一个装不下的高度，把内容顶出屏幕） */
+    #shopCard, #avatarCard{
+      max-height: 92%; width: min(76%, 460px);
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+    }
   }
   /* —— 商店弹窗 —— */
   #shop{
@@ -115,6 +129,7 @@
     background: #202737; color: #fff; border-radius: 14px;
     padding: 18px 20px; width: min(92vw, 460px);
     max-height: 86vh; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;   /* iOS 上滚动更顺滑 */
     box-shadow: 0 16px 60px rgba(0,0,0,.55);
   }
   .chip{
