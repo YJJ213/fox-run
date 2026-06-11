@@ -58,6 +58,12 @@
     border-radius: 10px; padding: 9px 14px; font-size: 14px; font-weight: bold; cursor: pointer;
   }
   #dailyBtn.hidden{ display: none; }
+  #homeBtn{
+    position: absolute; left: 12px; bottom: 12px; z-index: 5;
+    background: rgba(0,0,0,.35); color: #dfe6f5; border: 1px solid rgba(255,255,255,.3);
+    border-radius: 10px; padding: 9px 14px; font-size: 14px; cursor: pointer;
+  }
+  #homeBtn.hidden{ display: none; }
   #copyBtn{
     position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%); z-index: 5;
     background: #7df9ff; color: #04353a; border: none; border-radius: 12px;
@@ -65,6 +71,66 @@
     box-shadow: 0 6px 24px rgba(0,0,0,.4);
   }
   #copyBtn.hidden{ display: none; }
+  /* —— 主页大厅 —— */
+  #home{
+    position: fixed; inset: 0; z-index: 9;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(8,12,24,.35);
+  }
+  #home.hidden{ display: none; }
+  #homeCard{
+    background: rgba(22,28,42,.92); color: #fff; border-radius: 16px; text-align: center;
+    padding: 20px 26px; width: min(90vw, 400px);
+    box-shadow: 0 16px 60px rgba(0,0,0,.5);
+  }
+  #homeCard h1{ margin: 0 0 6px; font-size: 26px; }
+  #homeStats{ color: #aab6d0; font-size: 13px; margin-bottom: 12px; line-height: 1.7; }
+  #homeStart{
+    display: block; width: 100%; border: none; border-radius: 12px; padding: 14px;
+    background: #ffd34d; color: #4a3500; font-size: 19px; font-weight: bold; cursor: pointer;
+  }
+  #homeRow{ display: flex; gap: 8px; margin-top: 10px; }
+  #homeRow button{
+    flex: 1; border: none; border-radius: 10px; padding: 10px 4px;
+    background: rgba(255,255,255,.12); color: #dfe6f5; font-size: 13px; cursor: pointer;
+  }
+  #homeBoosts{ margin-top: 12px; text-align: left; }
+  #homeBoosts .bTitle{ color: #97a1b8; font-size: 12px; margin-bottom: 6px; }
+  #homeBoosts button{
+    border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 7px 9px;
+    background: rgba(255,255,255,.08); color: #dfe6f5; font-size: 12px; cursor: pointer;
+    margin: 0 4px 4px 0;
+  }
+  #homeBoosts button.on{ background: #ffd34d; color: #4a3500; font-weight: bold; border-color: #ffd34d; }
+  /* —— 签到日历 —— */
+  #sign{
+    position: fixed; inset: 0; z-index: 11;
+    background: rgba(8,12,24,.65);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #sign.hidden{ display: none; }
+  #signCard{
+    background: #202737; color: #fff; border-radius: 14px; text-align: center;
+    padding: 20px 22px; width: min(92vw, 420px);
+    box-shadow: 0 16px 60px rgba(0,0,0,.55);
+  }
+  #signCard h2{ margin: 0 0 12px; font-size: 19px; }
+  #signGrid{ display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 14px; }
+  .signCell{
+    background: rgba(255,255,255,.08); border-radius: 8px; padding: 8px 2px;
+    font-size: 11px; color: #aab6d0; line-height: 1.5;
+  }
+  .signCell.got{ background: rgba(255,211,77,.18); color: #ffd34d; }
+  .signCell.today{ outline: 2px solid #ffd34d; color: #fff; }
+  #signClaim{
+    width: 100%; border: none; border-radius: 10px; padding: 12px;
+    background: #ffd34d; color: #4a3500; font-size: 15px; font-weight: bold; cursor: pointer;
+  }
+  #signClaim:disabled{ background: #3a4357; color: #97a1b8; cursor: default; }
+  #signClose{
+    margin-top: 8px; width: 100%; border: none; border-radius: 10px; padding: 9px;
+    background: rgba(255,255,255,.14); color: #fff; cursor: pointer; font-size: 13px;
+  }
   /* —— 首次进入的"创建主角"弹窗 —— */
   #avatarAsk{
     position: fixed; inset: 0; z-index: 12;
@@ -118,7 +184,7 @@
   }
   /* 手机竖屏：把整个游戏（和商店）旋转 90°——打开就是满屏大横屏，不用手动转手机 */
   @media (max-width: 920px) and (orientation: portrait){
-    #wrap, #shop, #avatarAsk{
+    #wrap, #shop, #avatarAsk, #home, #sign{
       position: fixed; inset: auto; top: 0; left: 0;
       width: 100vh; height: 100vw;       /* 宽高互换（老浏览器的回退写法） */
       width: 100dvh; height: 100dvw;     /* dvh/dvw 会把浏览器工具栏算进去，更准 */
@@ -128,7 +194,7 @@
     }
     /* 旋转之后弹窗的"纵向"其实是屏幕的短边——尺寸必须按父容器的百分比算，
        不能再用 vh（vh 指的还是竖屏的长边，会算出一个装不下的高度，把内容顶出屏幕） */
-    #shopCard, #avatarCard{
+    #shopCard, #avatarCard, #homeCard, #signCard{
       max-height: 92%; width: min(76%, 460px);
       overflow-y: auto; -webkit-overflow-scrolling: touch;
     }
@@ -194,6 +260,7 @@
   <button id="reviveBtn" class="hidden">复活</button>
   <button id="dailyBtn" class="hidden">☀️ 今日挑战</button>
   <button id="copyBtn" class="hidden">📋 复制战绩发群里</button>
+  <button id="homeBtn" class="hidden">🏠 主页</button>
 </div>
 <p id="tip">空格 / ↑ / 点击屏幕 = 跳跃（长按跳得更高） · P 暂停 · M 静音 · B 商店</p>
 
@@ -202,12 +269,38 @@
   <div id="shopCard">
     <h2>🛒 商店 <span id="shopCoins"></span></h2>
     <div id="shopTabs">
-      <button id="tabCoin" class="active">💰 金币商店</button>
-      <button id="tabGem">💎 钻石商店</button>
+      <button id="tabCoin" class="active">💰 金币</button>
+      <button id="tabGem">💎 钻石</button>
+      <button id="tabSkin">👗 装扮</button>
     </div>
     <div id="shopList"></div>
     <button id="shopClose">关 闭</button>
     <input type="file" id="avatarFile" accept="image/*" hidden>
+  </div>
+</div>
+
+<!-- 主页大厅：开始游戏前的"客厅" -->
+<div id="home">
+  <div id="homeCard">
+    <h1>🦊 狐狸快跑</h1>
+    <div id="homeStats"></div>
+    <button id="homeStart">▶️ 开始游戏</button>
+    <div id="homeRow">
+      <button id="homeDaily">☀️ 今日挑战</button>
+      <button id="homeShop">🛒 商店</button>
+      <button id="homeSign">📅 签到 <span id="signDot" class="hidden">🔴</span></button>
+    </div>
+    <div id="homeBoosts"></div>
+  </div>
+</div>
+
+<!-- 签到日历 -->
+<div id="sign" class="hidden">
+  <div id="signCard">
+    <h2>📅 连续签到</h2>
+    <div id="signGrid"></div>
+    <button id="signClaim">领取今日奖励</button>
+    <button id="signClose">关 闭</button>
   </div>
 </div>
 
@@ -405,17 +498,28 @@ document.getElementById('avatarAskSkip').addEventListener('click', () => {
   if(startAfterAvatar){ startAfterAvatar = false; startGame(); }
 });
 
-/* —— 背景音乐：一段 4 小节的小曲子无限循环，也是代码现场合成的 —— */
+/* —— 背景音乐：三首小曲子，跑得越远节奏越快（0~2500米 / 2500~5000 / 5000+） —— */
 // 数字是 MIDI 音高（69 = 标准音 A4，每 +12 升一个八度），0 = 休止符
-// 和弦走向 C → G → Am → F，流行歌里用烂了的"万能四和弦"
-const BGM_MELODY = [
-  76,79,84,79, 76,79,72,76,   // C 和弦琶音
-  74,79,83,79, 74,79,71,74,   // G
-  76,81,84,81, 76,81,72,76,   // Am
-  77,81,84,81, 77,84,81,77,   // F
+const BGM_TRACKS = [
+  { step: 0.25,   // 第一乐章：悠闲（C→G→Am→F 万能四和弦）
+    melody: [ 76,79,84,79, 76,79,72,76,  74,79,83,79, 74,79,71,74,
+              76,81,84,81, 76,81,72,76,  77,81,84,81, 77,84,81,77 ],
+    bass:   [ 48,55,48,55, 43,50,43,50, 45,52,45,52, 41,48,41,48 ] },
+  { step: 0.22,   // 第二乐章：加速（Am→F→C→G，更有冲劲）
+    melody: [ 81,84,88,84, 81,84,76,81,  77,81,84,81, 77,81,72,77,
+              76,79,84,79, 76,79,72,76,  79,83,86,83, 79,83,74,79 ],
+    bass:   [ 45,52,45,52, 41,48,41,48, 48,55,48,55, 43,50,43,50 ] },
+  { step: 0.19,   // 第三乐章：狂飙（Em→C→G→D，高潮段）
+    melody: [ 76,79,83,88, 83,79,76,79,  72,76,79,84, 79,76,72,76,
+              79,83,86,91, 86,83,79,83,  74,78,81,86, 81,78,74,78 ],
+    bass:   [ 40,47,40,47, 36,43,36,43, 43,50,43,50, 38,45,38,45 ] },
 ];
-const BGM_BASS = [ 48,55,48,55, 43,50,43,50, 45,52,45,52, 41,48,41,48 ];   // 低音声部
-const BGM_STEP = 0.25;   // 一个八分音符的时长（秒）。改小曲子变快，改大变慢
+// 当前该放第几乐章：按本局跑的里程分段
+function bgmTier(){
+  if(game.state !== 'playing') return 0;
+  const m = game.runDist / 12;
+  return m >= 5000 ? 2 : m >= 2500 ? 1 : 0;
+}
 const bgm = { on: false, step: 0, nextTime: 0, timer: null };
 
 function midiToFreq(m){ return 440 * Math.pow(2, (m - 69) / 12); }
@@ -433,14 +537,15 @@ function scheduleBGM(){
   if(paused || document.hidden) return;   // 暂停或切到后台时，音乐也跟着停
   // 停了一阵子（暂停/后台回来）的话，把排队起点拉回"现在"，避免一瞬间补播一堆旧音符
   if(bgm.nextTime < actx.currentTime) bgm.nextTime = actx.currentTime + 0.05;
+  const trk = BGM_TRACKS[bgmTier()];
   while(bgm.nextTime < actx.currentTime + 1.2){
-    const i = bgm.step % BGM_MELODY.length;
-    if(BGM_MELODY[i]) playNote(BGM_MELODY[i], bgm.nextTime, 0.22, 'square', 0.013);
+    const i = bgm.step % trk.melody.length;
+    if(trk.melody[i]) playNote(trk.melody[i], bgm.nextTime, trk.step * 0.9, 'square', 0.013);
     if(i % 2 === 0){
-      const b = BGM_BASS[(i / 2) % BGM_BASS.length];
-      if(b) playNote(b, bgm.nextTime, 0.4, 'triangle', 0.028);
+      const b = trk.bass[(i / 2) % trk.bass.length];
+      if(b) playNote(b, bgm.nextTime, trk.step * 1.7, 'triangle', 0.028);
     }
-    bgm.nextTime += BGM_STEP;
+    bgm.nextTime += trk.step;
     bgm.step++;
   }
 }
@@ -464,7 +569,7 @@ function loadSave(){
                 mount: false, pet: false,
                 runs: 0, pitsSeen: 0, freeReviveUsed: false, nick: '',
                 lastLogin: '', streak: 0, daily: null, dailyRun: null,
-                bestDist: 0, lastBeat: '' };
+                bestDist: 0, lastBeat: '', skins: {}, skinOn: {} };
   try{
     const s = JSON.parse(localStorage.getItem('fox_save'));
     if(s && typeof s === 'object'){
@@ -575,6 +680,33 @@ function mulberry32(seed){
 let seededRng = Math.random;
 function srand(){ return dailyMode ? seededRng() : Math.random(); }   // 生成赛道内容专用的随机数
 function srange(a, b){ return a + srand() * (b - a); }
+
+/* —— 出发加成（主页里花金币买，下一局生效） —— */
+let pendingSprint = 0;    // 开局冲刺的米数（0=没买）
+let pendingShield = false;
+let boostDist = 0;        // 本局开局冲刺还要冲到的距离（像素）
+let curBgmTier = 0;       // 当前音乐段位（0/1/2，里程越远节奏越快）
+
+// 周末活动：金币双倍！
+function weekendBoost(){ const d = new Date().getDay(); return d === 0 || d === 6; }
+
+/* —— 装扮系统：每个角色的配色皮肤（钻石购买） —— */
+const SKINS2 = {
+  fox:    [ { id: 'sakura', name: '樱花粉', price: 3, c: { body:'#ffb7d0', body2:'#f08bb0', dark:'#d76e9a', tail:'#ffa0c4', scarf:'#9b59d0' } },
+            { id: 'shadow', name: '暗影黑', price: 5, c: { body:'#5a6275', body2:'#3d4456', dark:'#2c3242', tail:'#4a5266', belly:'#aeb6c8', scarf:'#ffd34d' } } ],
+  pig:    [ { id: 'mint',   name: '薄荷绿', price: 3, c: { body:'#a8e6c9', body2:'#7fcfa8', dark:'#5fb389', snout:'#d2f5e3', scarf:'#ff8a5c' } } ],
+  monkey: [ { id: 'snowm',  name: '雪猴白', price: 4, c: { body:'#e8ecf2', body2:'#c9d2de', dark:'#aab6c6', face:'#ffffff', belly:'#ffffff', scarf:'#e84545' } } ],
+  snowfox:[ { id: 'dusk',   name: '黄昏金', price: 5, c: { body:'#ffd9a0', body2:'#f0b870', dark:'#d09a50', tail:'#ffcf90', scarf:'#7f6df2' } } ],
+  dragon: [ { id: 'void',   name: '暗夜紫', price: 6, c: { body:'#8a6fd0', body2:'#6a4fae', dark:'#54408c', wing:'#c9b8f0', spike:'#7df9ff', belly:'#e6dcff', scarf:'#7df9ff' } } ],
+};
+// 角色当前的有效配色：穿了皮肤就用皮肤色盖在原色上
+function charC(id){
+  const base = CHARS[id].c;
+  const onId = save.skinOn && save.skinOn[id];
+  if(!onId) return base;
+  const sk = (SKINS2[id] || []).find(s => s.id === onId);
+  return sk ? Object.assign({}, base, sk.c) : base;
+}
 
 // 每日签到：跨天首次开局自动发奖，连续签到奖励递增（断签会清零——明天记得回来！）
 function dailyCheckIn(){
@@ -728,7 +860,10 @@ let jumpHeld = null;
 function pressJump(source){
   ensureAudio();
   if(paused){ paused = false; return; }
-  if(game.state === 'ready'){ startGame(); return; }   // 第一次点击直接开玩（照片邀请挪到第 2 局结束后）
+  if(game.state === 'ready'){
+    if(homeOpen()) return;   // 主页大厅开着：用大厅里的按钮开始
+    startGame(); return;
+  }
   if(game.state === 'dead'){
     // 死后稍等才接受重开，防止按键把结算画面"按穿"；
     // 如果复活按钮亮着，多等一会儿，免得手快误点屏幕错过复活机会
@@ -762,6 +897,15 @@ function releaseJump(source){
   if(game.state === 'playing' && player.vy < JUMP_CUT) player.vy = JUMP_CUT;
 }
 window.addEventListener('keydown', e => {
+  if(homeOpen() && game.state === 'ready'){   // 主页大厅：空格/回车 = 开始游戏
+    if(e.code === 'Space' || e.code === 'Enter'){
+      e.preventDefault();
+      homeEl.classList.add('hidden');
+      startGame();
+    }
+    return;
+  }
+  if(signOpen()){ if(e.code === 'Escape') signEl.classList.add('hidden'); return; }
   if(avatarAskOpen()){   // "创建主角"弹窗开着时：ESC 可以暂时关掉（下次还会再问）
     if(e.code === 'Escape'){
       avatarAskEl.classList.add('hidden');
@@ -825,11 +969,21 @@ function startGame(){
   bonusUntil = 0; nextBonusAt = 25; reviveCount = 0; shieldOn = false;
   bunny = null; distToBunny = 6000 + Math.random() * 4000;
   banner.until = 0; petPulseAt = 0; petPulseUntil = 0;
-  recordFlagShown = false;
+  recordFlagShown = false; curBgmTier = 0;
+  // 出发加成：在主页买好的 buff 这一局生效（日赛不可用，保证公平）
+  boostDist = 0;
+  if(!dailyMode){
+    if(pendingSprint > 0){
+      boostDist = pendingSprint * 12;
+      activatePower('dash');
+      showBanner('🚀 开局冲刺 ' + pendingSprint + ' 米！', 2, '#ffd34d');
+      pendingSprint = 0;
+    }
+    if(pendingShield){ shieldOn = true; pendingShield = false; }
+  }
   resetPlayer();
   startBGM();
   ensureDaily();      // 跨天换一组每日任务
-  dailyCheckIn();     // 每天第一局自动签到发奖
 }
 function die(cause){
   game.state = 'dead';
@@ -1140,6 +1294,22 @@ function update(dt){
   }
 
   // —— 下面是游戏进行中 ——
+  // 开局冲刺：距离没冲完之前，一直维持冲刺状态
+  if(boostDist > 0){
+    if(game.runDist < boostDist){
+      power.type = 'dash';
+      power.until = bgTime + 0.5; power.total = 1;
+    } else {
+      boostDist = 0;
+      power.until = bgTime;   // 立即走正常的"到期"流程（含 0.6 秒缓冲无敌）
+    }
+  }
+  // 音乐分段：跑过 2500/5000 米时切换更快节奏的乐章
+  const tier = bgmTier();
+  if(tier !== curBgmTier){
+    curBgmTier = tier;
+    if(tier > 0) showBanner('🎵 第' + (tier + 1) + '乐章：节奏加快！', 2, '#9ff3ff');
+  }
   if(power.type && bgTime > power.until){
     // 冲刺/变大结束的瞬间给 0.6 秒缓冲无敌：免得"差一帧就能撞碎"的障碍贴脸把你绊倒
     if(power.type === 'dash' || power.type === 'giant' || power.type === 'fly'){
@@ -1345,7 +1515,8 @@ function update(dt){
         floatText(c.x, c.y - 16, '+20分', '#ffb3f6');
         continue;
       }
-      const v = (power.type === 'coinx2') ? 2 : 1;   // 双倍金币道具：一枚顶两枚
+      let v = (power.type === 'coinx2') ? 2 : 1;   // 双倍金币道具：一枚顶两枚
+      if(weekendBoost()) v *= 2;                   // 周末活动：金币再双倍！
       game.coinCount += v;
       save.coins += v;
       taskProg('coins', v);
@@ -1766,8 +1937,8 @@ function drawBighead(c0){
     ctx.beginPath(); ctx.arc(c0.x, c0.y, r, 0, TAU); ctx.stroke();
     return;
   }
-  const ch = CHARS[save.char] || CHARS.fox;
-  ctx.fillStyle = ch.c.body;
+  const headCol = charC(save.char in CHARS ? save.char : 'fox');
+  ctx.fillStyle = headCol.body;
   ctx.beginPath(); ctx.arc(c0.x - 7, c0.y - 10, 5, 0, TAU); ctx.fill();   // 两只耳朵
   ctx.beginPath(); ctx.arc(c0.x + 7, c0.y - 10, 5, 0, TAU); ctx.fill();
   ctx.beginPath(); ctx.arc(c0.x, c0.y, r, 0, TAU); ctx.fill();            // 大脸
@@ -1839,6 +2010,7 @@ function drawPlayer(){
     dead: game.state === 'dead',
     face: bgTime < face.until ? face.mood : '',
     avatar: (save.useAvatar && avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) ? avatarImg : null,
+    pal: dailyMode ? CHARS.fox.c : charC(save.char),   // 日赛统一原色，平时穿皮肤
   });
   ctx.restore();
   // 护盾：一圈呼吸的蓝光
@@ -1879,7 +2051,7 @@ function drawPlayer(){
    c = 画到哪块画布，ch = CHARS 里的角色，o = 姿态参数（时间/着地/摆腿/滑翔/眨眼/死亡）
    坐标系：原点在角色脚底中心，身体大约占 x -22~22、y -46~0 */
 function drawCharacter(c, ch, o){
-  const col = ch.c;
+  const col = o.pal || ch.c;   // o.pal：装扮系统传进来的皮肤配色
   const t = o.time;
   function crr(x, y, w, h, r){   // 这块画布自己的圆角矩形
     r = Math.min(r, w / 2, h / 2);
@@ -2237,6 +2409,8 @@ function drawHUD(){
 
 function drawOverlay(){
   if(game.state === 'playing' && !paused) return;
+  if(game.state === 'ready' && homeOpen()) return;   // 主页大厅开着时，开始界面交给大厅
+
   ctx.fillStyle = 'rgba(10,14,28,0.45)';
   ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -2362,6 +2536,7 @@ const shopCoinsEl = document.getElementById('shopCoins');
 let shopTab = 'coin';   // 当前页签：coin=金币商店 | gem=钻石商店
 document.getElementById('tabCoin').addEventListener('click', () => { shopTab = 'coin'; renderShop(); });
 document.getElementById('tabGem').addEventListener('click', () => { shopTab = 'gem'; renderShop(); });
+document.getElementById('tabSkin').addEventListener('click', () => { shopTab = 'skin'; renderShop(); });
 // 货架：kind 为 char 的是角色（名字/能力/价格都在 CHARS 里），up 的是可升级项
 const SHOP_GOODS = [
   { id: 'fox',     kind: 'char' },
@@ -2376,6 +2551,7 @@ function renderShop(){
   shopCoinsEl.textContent = '💰 ' + save.coins + '　💎 ' + save.gems;
   document.getElementById('tabCoin').classList.toggle('active', shopTab === 'coin');
   document.getElementById('tabGem').classList.toggle('active', shopTab === 'gem');
+  document.getElementById('tabSkin').classList.toggle('active', shopTab === 'skin');
   let html = '';
   if(shopTab === 'coin'){
   for(const g of SHOP_GOODS){
@@ -2413,13 +2589,13 @@ function renderShop(){
           (save.useAvatar ? '<span class="chip chip-g">使用中</span>' : '') +
           '<small>上传一张照片，角色的脑袋换成你！撞到、吃道具、阵亡都有专属表情</small></div>' +
           '<div>' + avBtns + '</div></div>';
-  } else {
+  } else if(shopTab === 'gem'){
   // —— 钻石商店：💎 专属高级货，和金币商店完全分开 ——
   html += '<div class="shop-row"><div class="shop-prev">🐰</div>' +
           '<div class="grow"><b>怎么获得钻石？</b><small>路上偶尔出现背着钻石的小兔子——跳起来扑住它就 +1 💎（未来会有更多获取方式）</small></div></div>';
   const gemGoods = [
-    { id: 'mount', name: '坐骑·筋斗云', desc: '脚踩白云：所有角色额外 +1 段跳！', emoji: '☁️', cost: 8 },
-    { id: 'pet',   name: '精灵·星宝',   desc: '飘在身边的小精灵，每 8 秒自动帮你吸一波金币', emoji: '🧚', cost: 5 },
+    { id: 'mount', name: '坐骑·筋斗云', desc: '脚踩白云：所有角色额外 +1 段跳！（镇店之宝）', emoji: '☁️', cost: 25 },
+    { id: 'pet',   name: '精灵·星宝',   desc: '飘在身边的小精灵，每 8 秒自动帮你吸一波金币', emoji: '🧚', cost: 12 },
   ];
   for(const g2 of gemGoods){
     const btn2 = save[g2.id]
@@ -2429,6 +2605,24 @@ function renderShop(){
             '<div class="grow"><b>' + g2.name + '</b><span class="chip" style="background:#23bcc9">钻石专属</span>' +
             '<small>' + g2.desc + '</small></div>' +
             '<div>' + btn2 + '</div></div>';
+  }
+  } else {
+  // —— 装扮间：给已拥有的伙伴换配色皮肤（💎 购买，随时切换） ——
+  html += '<div class="shop-row"><div class="shop-prev">👗</div>' +
+          '<div class="grow"><b>换装间</b><small>已拥有的伙伴才能换装；买了皮肤随时切换，预览实时试穿</small></div></div>';
+  for(const cid of save.chars){
+    const list = SKINS2[cid] || [];
+    if(!list.length) continue;
+    let sw = '<button data-act="skin-wear" data-cid="' + cid + '" data-sid=""' + (!save.skinOn[cid] ? ' disabled' : '') + '>原色</button> ';
+    for(const sk of list){
+      const owned = (save.skins[cid] || []).includes(sk.id);
+      const on = save.skinOn[cid] === sk.id;
+      sw += owned
+        ? '<button data-act="skin-wear" data-cid="' + cid + '" data-sid="' + sk.id + '"' + (on ? ' disabled' : '') + '>' + (on ? sk.name + ' ✓' : '穿' + sk.name) + '</button> '
+        : '<button data-act="skin-buy" data-cid="' + cid + '" data-sid="' + sk.id + '">' + sk.name + ' ' + sk.price + '💎</button> ';
+    }
+    html += '<div class="shop-row"><canvas class="shop-prev" width="72" height="56" data-char="' + cid + '"></canvas>' +
+            '<div class="grow"><b>' + CHARS[cid].name + '</b><small>' + sw + '</small></div></div>';
   }
   }
   shopList.innerHTML = html;
@@ -2456,6 +2650,7 @@ function drawCharPreview(cv, id, t){
     gliding: false,
     blinking: (t % 3) < 0.12 ? 1 : 0,
     dead: false,
+    pal: charC(id in CHARS ? id : 'fox'),   // 预览也穿着当前皮肤
   });
   c.restore();
 }
@@ -2470,9 +2665,29 @@ shopList.addEventListener('click', e => {
     saveSave(); renderShop();
     return;
   }
+  // 装扮：穿皮肤 / 买皮肤
+  if(b.dataset.act === 'skin-wear'){
+    if(b.dataset.sid) save.skinOn[b.dataset.cid] = b.dataset.sid;
+    else delete save.skinOn[b.dataset.cid];
+    saveSave(); renderShop();
+    return;
+  }
+  if(b.dataset.act === 'skin-buy'){
+    const cid = b.dataset.cid;
+    const sk = (SKINS2[cid] || []).find(s => s.id === b.dataset.sid);
+    if(!sk) return;
+    if(performance.now() - lastBuyAt < 350) return;
+    lastBuyAt = performance.now();
+    if(save.gems < sk.price){ b.textContent = '钻石不够！'; setTimeout(renderShop, 900); return; }
+    save.gems -= sk.price;
+    (save.skins[cid] = save.skins[cid] || []).push(sk.id);
+    save.skinOn[cid] = sk.id;
+    sfx.power(); saveSave(); renderShop();
+    return;
+  }
   // 钻石商品（坐骑/精灵）
   if(b.dataset.act === 'gem-buy'){
-    const gemCosts = { mount: 8, pet: 5 };
+    const gemCosts = { mount: 25, pet: 12 };
     const gid = b.dataset.id, gcost = gemCosts[gid];
     if(performance.now() - lastBuyAt < 350) return;
     lastBuyAt = performance.now();
@@ -2575,7 +2790,7 @@ function startDaily(){
 }
 dailyBtn.addEventListener('click', function(){
   ensureAudio();
-  if(dailyMode && game.state === 'dead'){ dailyMode = false; game.state = 'ready'; }   // 赛后返回普通模式
+  if(dailyMode && game.state === 'dead'){ goHome(); }   // 赛后回主页
   else if(game.state === 'ready'){ startDaily(); }
   this.blur();
 });
@@ -2597,6 +2812,96 @@ copyBtn.addEventListener('click', function(){
     navigator.clipboard.writeText(txt).then(ok).catch(() => fallbackCopy(txt, ok));
   } else fallbackCopy(txt, ok);
 });
+
+/* —— 主页大厅 & 签到日历 —— */
+const homeEl = document.getElementById('home');
+const signEl = document.getElementById('sign');
+const homeBtn = document.getElementById('homeBtn');
+function homeOpen(){ return !homeEl.classList.contains('hidden'); }
+function signOpen(){ return !signEl.classList.contains('hidden'); }
+const SIGN_REWARDS = ['💰50', '💰80', '💰120', '💰160', '💎1', '💰250', '💎2+💰300'];
+function canClaimSign(){ return save.lastLogin !== todayStr(); }
+function renderHome(){
+  document.getElementById('homeStats').innerHTML =
+    '最高 ' + game.best + ' 分 · 💰' + save.coins + ' · 💎' + save.gems +
+    (save.streak ? ' · 已连签 ' + save.streak + ' 天' : '') +
+    (weekendBoost() ? '<br>🎉 周末狂欢：金币双倍进行中！' : '');
+  document.getElementById('signDot').classList.toggle('hidden', !canClaimSign());
+  const opts = [{ k: 300, cost: 80 }, { k: 500, cost: 150 }, { k: 1000, cost: 300 }];
+  let bh = '<div class="bTitle">出发加成（花金币买，仅下一局生效，再点一次取消退款）：</div>';
+  for(const o2 of opts){
+    bh += '<button data-boost="' + o2.k + '" data-cost="' + o2.cost + '" class="' + (pendingSprint === o2.k ? 'on' : '') + '">🚀 冲刺 ' + o2.k + ' 米 · ' + o2.cost + '💰</button>';
+  }
+  bh += '<button data-boost="shield" data-cost="60" class="' + (pendingShield ? 'on' : '') + '">🛡 开局护盾 · 60💰</button>';
+  document.getElementById('homeBoosts').innerHTML = bh;
+}
+document.getElementById('homeBoosts').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if(!b) return;
+  const cost = parseInt(b.dataset.cost);
+  if(b.dataset.boost === 'shield'){
+    if(pendingShield){ pendingShield = false; save.coins += cost; }                 // 取消=退款
+    else if(save.coins >= cost){ pendingShield = true; save.coins -= cost; sfx.coin(); }
+    else { b.textContent = '金币不够！'; setTimeout(renderHome, 800); return; }
+  } else {
+    const k = parseInt(b.dataset.boost);
+    const opts2 = [{ k: 300, cost: 80 }, { k: 500, cost: 150 }, { k: 1000, cost: 300 }];
+    const prev = opts2.find(x => x.k === pendingSprint);
+    if(pendingSprint === k){ pendingSprint = 0; save.coins += cost; }               // 再点一次=取消退款
+    else {
+      if(prev) save.coins += prev.cost;                                             // 换档先退上一档
+      if(save.coins >= cost){ pendingSprint = k; save.coins -= cost; sfx.coin(); }
+      else { pendingSprint = 0; b.textContent = '金币不够！'; setTimeout(renderHome, 800); }
+    }
+  }
+  saveSave(); renderHome();
+});
+function goHome(){
+  dailyMode = false;
+  game.state = 'ready';
+  resetPlayer();
+  renderHome();
+  homeEl.classList.remove('hidden');
+}
+homeBtn.addEventListener('click', function(){ goHome(); this.blur(); });
+document.getElementById('homeStart').addEventListener('click', function(){
+  ensureAudio();
+  homeEl.classList.add('hidden');
+  startGame();
+});
+document.getElementById('homeDaily').addEventListener('click', function(){
+  ensureAudio();
+  homeEl.classList.add('hidden');
+  startDaily();
+});
+document.getElementById('homeShop').addEventListener('click', function(){ ensureAudio(); toggleShop(true); });
+document.getElementById('homeSign').addEventListener('click', function(){
+  ensureAudio(); renderSign(); signEl.classList.remove('hidden');
+});
+function renderSign(){
+  const claimable = canClaimSign();
+  const yest = new Date(); yest.setDate(yest.getDate() - 1);
+  const nextStreak = claimable ? ((save.lastLogin === yest.toDateString()) ? save.streak + 1 : 1) : save.streak;
+  const todayIdx = ((Math.max(1, nextStreak) - 1) % 7);
+  let gh = '';
+  for(let i = 0; i < 7; i++){
+    const got = claimable ? i < todayIdx : i <= todayIdx && save.streak > 0;
+    gh += '<div class="signCell' + (got ? ' got' : '') + (i === todayIdx ? ' today' : '') + '">第' + (i + 1) + '天<br>' + SIGN_REWARDS[i] + (got && (claimable || i !== todayIdx) ? '<br>✓' : (got ? '<br>✓' : '')) + '</div>';
+  }
+  document.getElementById('signGrid').innerHTML = gh;
+  const btn = document.getElementById('signClaim');
+  btn.disabled = !claimable;
+  btn.textContent = claimable ? '领取第 ' + nextStreak + ' 天奖励' : '今天已领，明天再来！';
+}
+document.getElementById('signClaim').addEventListener('click', function(){
+  if(!canClaimSign()) return;
+  dailyCheckIn();
+  sfx.power();
+  renderSign(); renderHome();
+});
+document.getElementById('signClose').addEventListener('click', () => signEl.classList.add('hidden'));
+signEl.addEventListener('pointerdown', e => { if(e.target === signEl) signEl.classList.add('hidden'); });
+renderHome();
 
 document.getElementById('shopBtn').addEventListener('click', function(){ ensureAudio(); toggleShop(true); this.blur(); });
 document.getElementById('shopClose').addEventListener('click', () => toggleShop(false));
@@ -2626,13 +2931,15 @@ function frame(t){
     const revTxt = revFree ? '🎁 新手专享：免费复活！' : '💰 花 ' + revCost + ' 金币复活' + nearTxt;
     if(reviveBtn.textContent !== revTxt) reviveBtn.textContent = revTxt;
   }
-  // 今日挑战按钮：开始界面显示；日赛结算后变成"返回"
-  const dShow = !shopOpen() && (game.state === 'ready' || (game.state === 'dead' && dailyMode));
+  // 今日挑战按钮：开始界面（大厅关着时）显示；日赛结算后变成"回主页"
+  const dShow = !shopOpen() && ((game.state === 'ready' && !homeOpen()) || (game.state === 'dead' && dailyMode));
   dailyBtn.classList.toggle('hidden', !dShow);
   if(dShow){
-    const dTxt = (dailyMode && game.state === 'dead') ? '↩️ 回普通模式' : '☀️ 今日挑战';
+    const dTxt = (dailyMode && game.state === 'dead') ? '🏠 回主页' : '☀️ 今日挑战';
     if(dailyBtn.textContent !== dTxt) dailyBtn.textContent = dTxt;
   }
+  // 主页按钮：普通模式结算后出现
+  homeBtn.classList.toggle('hidden', !(game.state === 'dead' && !dailyMode && !shopOpen()));
   // 复制战绩按钮：日赛结算时出现
   const cShow = game.state === 'dead' && dailyMode && !shopOpen();
   copyBtn.classList.toggle('hidden', !cShow);
