@@ -45,37 +45,48 @@
     padding: 6px 9px; cursor: pointer;
   }
   #pauseBtn:hover{ background: rgba(255,255,255,.3); }
-  #reviveBtn{
-    position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%);
-    background: #ffd34d; color: #4a3500; border: none; border-radius: 12px;
-    padding: 12px 24px; font-size: 17px; font-weight: bold; cursor: pointer;
-    box-shadow: 0 6px 24px rgba(0,0,0,.4); z-index: 5;
+  /* —— 死亡结算卡片 —— */
+  #dead{
+    position: fixed; inset: 0; z-index: 8;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(8,12,24,.55);
   }
+  #dead.hidden{ display: none; }
+  #deadCard{
+    background: #202737; color: #fff; border-radius: 16px; text-align: center;
+    padding: 18px 24px; width: min(90vw, 360px);
+    box-shadow: 0 16px 60px rgba(0,0,0,.55);
+  }
+  #deadCard h2{ margin: 0; font-size: 23px; }
+  #deadSub{ color: #ffd34d; font-size: 14px; font-weight: bold; min-height: 18px; margin-top: 4px; }
+  #deadScore{ font-size: 34px; font-weight: bold; color: #ffd34d; margin: 2px 0 4px; }
+  #deadStats{ color: #aab6d0; font-size: 12px; line-height: 1.7; margin-bottom: 8px; }
+  #deadGoal{ margin-bottom: 4px; }
+  #deadGoal .gbar{ background: rgba(255,255,255,.15); border-radius: 6px; height: 10px; overflow: hidden; }
+  #deadGoal .gfill{ background: #7fb3ff; height: 100%; border-radius: 6px; }
+  #deadGoal .gfill.full{ background: #ffd34d; }
+  #deadGoal .gtxt{ color: #c5cede; font-size: 12px; margin-top: 5px; }
+  #deadCard button{
+    display: block; width: 100%; border: none; border-radius: 10px;
+    padding: 11px; margin-top: 8px; font-size: 15px; font-weight: bold; cursor: pointer;
+  }
+  #reviveBtn{ background: #ffd34d; color: #4a3500; }
   #reviveBtn.hidden{ display: none; }
+  #againBtn{ background: rgba(255,255,255,.16); color: #fff; }
   #dailyBtn{
     position: absolute; left: 12px; bottom: 12px; z-index: 5;
     background: rgba(0,0,0,.35); color: #ffd34d; border: 1px solid rgba(255,211,77,.5);
     border-radius: 10px; padding: 9px 14px; font-size: 14px; font-weight: bold; cursor: pointer;
   }
   #dailyBtn.hidden{ display: none; }
-  #homeBtn{
-    position: absolute; left: 12px; bottom: 12px; z-index: 5;
-    background: rgba(0,0,0,.35); color: #dfe6f5; border: 1px solid rgba(255,255,255,.3);
-    border-radius: 10px; padding: 9px 14px; font-size: 14px; cursor: pointer;
-  }
-  #homeBtn.hidden{ display: none; }
-  #copyBtn{
-    position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%); z-index: 5;
-    background: #7df9ff; color: #04353a; border: none; border-radius: 12px;
-    padding: 12px 24px; font-size: 16px; font-weight: bold; cursor: pointer;
-    box-shadow: 0 6px 24px rgba(0,0,0,.4);
-  }
+  #homeBtn{ background: none !important; color: #97a1b8 !important; font-weight: normal !important; font-size: 13px !important; }
+  #copyBtn{ background: #7df9ff; color: #04353a; }
   #copyBtn.hidden{ display: none; }
   /* —— 主页大厅 —— */
   #home{
     position: fixed; inset: 0; z-index: 9;
     display: flex; align-items: center; justify-content: center;
-    background: rgba(8,12,24,.35);
+    background: rgba(8,12,24,.78);
   }
   #home.hidden{ display: none; }
   #homeCard{
@@ -94,7 +105,22 @@
     flex: 1; border: none; border-radius: 10px; padding: 10px 4px;
     background: rgba(255,255,255,.12); color: #dfe6f5; font-size: 13px; cursor: pointer;
   }
-  #homeBoosts{ margin-top: 12px; text-align: left; }
+  #homeSign{ position: relative; }
+  #signDot{
+    position: absolute; top: -4px; right: -4px; width: 12px; height: 12px;
+    border-radius: 50%; background: #ff4d4d; border: 2px solid #1d2433;
+  }
+  #signDot.hidden{ display: none; }
+  #muteBtn svg, #shopBtn svg, #pauseBtn svg{ display: block; }
+  #homeNick{ color: #97a1b8; font-size: 12px; margin: -4px 0 10px; }
+  #homeNick input{
+    width: 110px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+    border-radius: 6px; color: #fff; padding: 3px 8px; font-size: 12px;
+  }
+  #homeTasks{ margin-top: 10px; text-align: left; background: rgba(255,255,255,.05); border-radius: 10px; padding: 10px 12px; }
+  #homeTasks .tline{ font-size: 12px; color: #c5cede; margin: 3px 0; display: flex; justify-content: space-between; }
+  #homeTasks .tline.done{ color: #7fd89a; }
+  #homeBoosts{ margin-top: 10px; text-align: left; background: rgba(255,255,255,.05); border-radius: 10px; padding: 10px 12px; }
   #homeBoosts .bTitle{ color: #97a1b8; font-size: 12px; margin-bottom: 6px; }
   #homeBoosts button{
     border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 7px 9px;
@@ -184,7 +210,7 @@
   }
   /* 手机竖屏：把整个游戏（和商店）旋转 90°——打开就是满屏大横屏，不用手动转手机 */
   @media (max-width: 920px) and (orientation: portrait){
-    #wrap, #shop, #avatarAsk, #home, #sign{
+    #wrap, #shop, #avatarAsk, #home, #sign, #dead{
       position: fixed; inset: auto; top: 0; left: 0;
       width: 100vh; height: 100vw;       /* 宽高互换（老浏览器的回退写法） */
       width: 100dvh; height: 100dvw;     /* dvh/dvw 会把浏览器工具栏算进去，更准 */
@@ -194,8 +220,8 @@
     }
     /* 旋转之后弹窗的"纵向"其实是屏幕的短边——尺寸必须按父容器的百分比算，
        不能再用 vh（vh 指的还是竖屏的长边，会算出一个装不下的高度，把内容顶出屏幕） */
-    #shopCard, #avatarCard, #homeCard, #signCard{
-      max-height: 92%; width: min(76%, 460px);
+    #shopCard, #avatarCard, #homeCard, #signCard, #deadCard{
+      max-height: 88%; width: min(76%, 460px);
       overflow-y: auto; -webkit-overflow-scrolling: touch;
     }
   }
@@ -226,7 +252,10 @@
     background: rgba(255,255,255,.10); color: #97a1b8; font-size: 14px; cursor: pointer;
   }
   #shopTabs button.active{ background: #ffd34d; color: #4a3500; font-weight: bold; }
-  #tabGem.active{ background: #23bcc9; color: #04353a; }
+  #shopTabs button#tabGem.active{ background: #23bcc9; color: #04353a; }   /* 青=钻石（注意优先级要压过上一条） */
+  #shopTabs button#tabSkin.active{ background: #c77dff; color: #2a0a3a; } /* 紫=装扮 */
+  .shop-row button.cant{ background: #3a4357; color: #97a1b8; }
+  #homeBoosts button.cant{ opacity: .55; }
   .shop-row{
     display: flex; justify-content: space-between; align-items: center; gap: 10px;
     padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.08);
@@ -257,10 +286,7 @@
   <button id="muteBtn" title="静音 (M)">🔊</button>
   <button id="shopBtn" title="商店 (B)">🛒</button>
   <button id="pauseBtn" title="暂停 (P)">⏸️</button>
-  <button id="reviveBtn" class="hidden">复活</button>
   <button id="dailyBtn" class="hidden">☀️ 今日挑战</button>
-  <button id="copyBtn" class="hidden">📋 复制战绩发群里</button>
-  <button id="homeBtn" class="hidden">🏠 主页</button>
 </div>
 <p id="tip">空格 / ↑ / 点击屏幕 = 跳跃（长按跳得更高） · P 暂停 · M 静音 · B 商店</p>
 
@@ -284,11 +310,13 @@
   <div id="homeCard">
     <h1>🦊 狐狸快跑</h1>
     <div id="homeStats"></div>
+    <div id="homeNick">昵称 <input id="nickInput" maxlength="12" placeholder="神秘小狐狸"> <span style="color:#5b667e">会写进你的挑战链接</span></div>
     <button id="homeStart">▶️ 开始游戏</button>
+    <div id="homeTasks"></div>
     <div id="homeRow">
       <button id="homeDaily">☀️ 今日挑战</button>
       <button id="homeShop">🛒 商店</button>
-      <button id="homeSign">📅 签到 <span id="signDot" class="hidden">🔴</span></button>
+      <button id="homeSign">📅 签到<span id="signDot" class="hidden"></span></button>
     </div>
     <div id="homeBoosts"></div>
   </div>
@@ -301,6 +329,21 @@
     <div id="signGrid"></div>
     <button id="signClaim">领取今日奖励</button>
     <button id="signClose">关 闭</button>
+  </div>
+</div>
+
+<!-- 死亡结算卡片 -->
+<div id="dead" class="hidden">
+  <div id="deadCard">
+    <h2 id="deadTitle">游戏结束</h2>
+    <div id="deadSub"></div>
+    <div id="deadScore"></div>
+    <div id="deadStats"></div>
+    <div id="deadGoal"></div>
+    <button id="reviveBtn" class="hidden">复活</button>
+    <button id="againBtn">🔁 再来一局</button>
+    <button id="copyBtn" class="hidden">📋 复制战绩发群里</button>
+    <button id="homeBtn">🏠 回主页</button>
   </div>
 </div>
 
@@ -466,8 +509,15 @@ const sfx = {
     beep({f0:262, dur:0.8,  type:'triangle', vol:0.07, delay:0.75});
   },
 };
+/* —— 功能图标用内联 SVG（emoji 是深灰色、压在深色按钮上看不清，各手机渲染还不一致） —— */
+const SVG_PAUSE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="#fff"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+const SVG_PLAY  = '<svg viewBox="0 0 24 24" width="20" height="20" fill="#fff"><path d="M8 5v14l11-7z"/></svg>';
+const SVG_CART  = '<svg viewBox="0 0 24 24" width="20" height="20" fill="#fff"><path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.2 14h9.9c.8 0 1.4-.4 1.8-1.1L23 5H6.2L5.3 3H2v2h2l3.6 7.6-1.4 2.4C5.5 16.4 6.5 18 8 18h12v-2H8l-.8-2z"/></svg>';
+const SVG_VOL_ON  = '<svg viewBox="0 0 24 24" width="20" height="20" fill="#fff"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>';
+const SVG_VOL_OFF = '<svg viewBox="0 0 24 24" width="20" height="20" fill="#fff"><path d="M3 9v6h4l5 5V4L7 9H3zm13.6 3 2.7-2.7-1.4-1.4-2.7 2.7-2.7-2.7-1.4 1.4 2.7 2.7-2.7 2.7 1.4 1.4 2.7-2.7 2.7 2.7 1.4-1.4-2.7-2.7z"/></svg>';
 const muteBtn = document.getElementById('muteBtn');
-function refreshMuteBtn(){ muteBtn.textContent = muted ? '🔇' : '🔊'; }
+function refreshMuteBtn(){ muteBtn.innerHTML = muted ? SVG_VOL_OFF : SVG_VOL_ON; }
+document.getElementById('shopBtn').innerHTML = SVG_CART;
 refreshMuteBtn();
 function toggleMute(){
   muted = !muted;
@@ -480,7 +530,10 @@ function toggleMute(){
 muteBtn.addEventListener('click', () => { toggleMute(); muteBtn.blur(); });
 const pauseBtn = document.getElementById('pauseBtn');
 pauseBtn.addEventListener('click', function(){
-  if(game.state === 'playing') paused = !paused;   // 只有游戏进行中才能暂停/继续
+  if(game.state === 'playing'){
+    if(!paused) paused = true;
+    else if(!resumeUntil) resumeUntil = performance.now() + 1500;   // 恢复前先 3-2-1
+  }
   this.blur();
 });
 const reviveBtn = document.getElementById('reviveBtn');
@@ -620,6 +673,7 @@ const game = {
   best: best,
   newBest: false,
   startBest: 0,        // 本局开始时的最高分（用来判断"破纪录的那一瞬间"）
+  milestone: 0,        // 本局已报喜过的整千米数
   recordShown: false,  // 破纪录横幅本局是否已经放过
   shake: 0,            // 屏幕震动强度（死亡时的"打击感"）
   deathBy: '',         // 这局是怎么结束的：'pit'=掉坑，'hit'=撞死（经典模式）
@@ -643,18 +697,24 @@ const POWER_INFO = {
   shield: { name: '护盾', color: '#8ecaff' },   // 挡下一次撞击（不占道具栏）
   fly:    { name: '飞行', color: '#ffa7e2' },   // 飞上天巡航：无敌 + 自带磁吸
 };
-const power = { type: null, until: 0, total: 1 };   // 当前生效的道具
+const power = { type: null, until: 0, total: 1 };   // 移动系道具槽（冲刺/变大/飞行 互斥）
+let magnetUntil = 0, magnetTotal = 1;   // 收益系：磁铁——独立计时，可与任何道具叠加
+let coinx2Until = 0, coinx2Total = 1;   // 收益系：双倍金币
+let goldStorm = false;                  // 组合技：冲刺 × 双倍金币 = ⚡黄金风暴
 const items = [];                                   // 场上漂浮的道具
 let distToItem = 2200;      // 还要跑多远出现下一个道具
 
 /* —— v2.0 新系统 —— */
 let bonusUntil = 0;         // 超级奖励时间的截止时刻（吃金币攒出来的福利关）
+let bonusCount = 0;         // 本局进过几次奖励关（决定轮到哪种玩法）
+let bonusKind = 0;          // 本次奖励关玩法：0=大头雨 1=飞天黄金 2=狂暴冲撞
 let nextBonusAt = 25;       // 本局再吃到多少枚金币就进奖励关（第一次门槛低，让新手早点看到高光时刻；之后 +100）
 let reviveCount = 0;        // 本局已复活次数（复活费一次比一次贵：200、400、600……）
 let shieldOn = false;       // 护盾道具：挡一次撞击
 let petPulseAt = 0, petPulseUntil = 0;   // 精灵·星宝的吸金币脉冲计时
 let bunny = null;           // 钻石兔（场上最多一只）
 let distToBunny = 8000;     // 还要跑多远钻石兔才出现
+let nextMeteorAt = 5000;    // ☄️ 流星雨事件的下一个触发里程（米，5000 米后的后期内容）
 const banner = { text: '', until: 0, color: '#ffd34d' };   // 屏幕中央的大横幅
 function showBanner(text, dur, color){
   banner.text = text; banner.until = bgTime + dur; banner.color = color || '#ffd34d';
@@ -684,8 +744,10 @@ function srange(a, b){ return a + srand() * (b - a); }
 /* —— 出发加成（主页里花金币买，下一局生效） —— */
 let pendingSprint = 0;    // 开局冲刺的米数（0=没买）
 let pendingShield = false;
+let resumeUntil = 0;      // 暂停恢复的 3-2-1 倒计时（真实时间毫秒，0=没在倒计时）
 let boostDist = 0;        // 本局开局冲刺还要冲到的距离（像素）
 let curBgmTier = 0;       // 当前音乐段位（0/1/2，里程越远节奏越快）
+let curBiome = 0;         // 当前生物群系（0 草原 / 1 沙漠 / 2 雪夜），与音乐分段同步
 
 // 周末活动：金币双倍！
 function weekendBoost(){ const d = new Date().getDay(); return d === 0 || d === 6; }
@@ -859,16 +921,18 @@ function resetPlayer(){
 let jumpHeld = null;
 function pressJump(source){
   ensureAudio();
-  if(paused){ paused = false; return; }
+  if(paused){
+    if(!resumeUntil) resumeUntil = performance.now() + 1500;   // 不瞬间续跑：先 3-2-1
+    return;
+  }
   if(game.state === 'ready'){
     if(homeOpen()) return;   // 主页大厅开着：用大厅里的按钮开始
     startGame(); return;
   }
   if(game.state === 'dead'){
-    // 死后稍等才接受重开，防止按键把结算画面"按穿"；
-    // 如果复活按钮亮着，多等一会儿，免得手快误点屏幕错过复活机会
+    // 结算卡片上有显式按钮；点屏幕重开只兜底（无复活资格 + 1.2 秒防误触）
     const canRevive = !dailyMode && (!save.freeReviveUsed || save.coins >= 200 * (reviveCount + 1));
-    if(bgTime - game.deadAt > (canRevive ? 1.5 : 0.45)) startGame();
+    if(!canRevive && bgTime - game.deadAt > 1.2) startGame();
     return;
   }
   jumpHeld = source;
@@ -920,7 +984,12 @@ window.addEventListener('keydown', e => {
   if(e.code === 'Space' || e.code === 'ArrowUp') e.preventDefault();  // 防止空格滚动页面
   if(e.repeat) return;   // 忽略按住不放产生的重复事件
   if(e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') pressJump('key');
-  else if(e.code === 'KeyP'){ if(game.state === 'playing') paused = !paused; }
+  else if(e.code === 'KeyP'){
+    if(game.state === 'playing'){
+      if(!paused) paused = true;
+      else if(!resumeUntil) resumeUntil = performance.now() + 1500;
+    }
+  }
   else if(e.code === 'KeyM') toggleMute();
   else if(e.code === 'KeyB') toggleShop(true);
   else if(e.code === 'KeyR'){ if(game.state === 'dead' && bgTime - game.deadAt > 0.45) startGame(); }
@@ -967,6 +1036,8 @@ function startGame(){
   face.until = 0;
   game.startBest = game.best; game.recordShown = false;
   bonusUntil = 0; nextBonusAt = 25; reviveCount = 0; shieldOn = false;
+  bonusCount = 0; bonusKind = 0; magnetUntil = 0; coinx2Until = 0; goldStorm = false;
+  patQueue = []; nextMeteorAt = 5000; game.milestone = 0;
   bunny = null; distToBunny = 6000 + Math.random() * 4000;
   banner.until = 0; petPulseAt = 0; petPulseUntil = 0;
   recordFlagShown = false; curBgmTier = 0;
@@ -1001,20 +1072,10 @@ function die(cause){
     if(game.score > game.startBest){
       game.newBest = true;
       save.bestDist = Math.floor(game.runDist);   // 记下纪录局跑到的距离 → 赛道上的"纪录旗"
-      if(!save.nick){   // 第一次破纪录时给自己起个昵称，写进挑战链接
-        try{
-          const n = prompt('🎉 破纪录啦！给自己起个昵称（朋友点你的链接时会看到）：', '神秘小狐狸');
-          if(n) save.nick = String(n).slice(0, 12);
-        }catch(e){}
-      }
     }
   }
   saveBest();
-  // 第 2 局结束后才邀请上传照片——先让玩家爱上游戏，再请他把脸放进来
-  if(!dailyMode && save.runs === 2 && !save.avatar && !save.skippedAvatar){
-    startAfterAvatar = false;
-    avatarAskEl.classList.remove('hidden');
-  }
+  updateDeadCard();   // 把结算信息填进 DOM 卡片
 }
 // 日赛成绩记录（与无尽模式的最高分完全分开）
 function recordDailyRun(){
@@ -1035,6 +1096,7 @@ function finishDaily(){
   sfx.power();
   taskProg('meters', 0, Math.floor(game.runDist / 12));
   recordDailyRun();
+  updateDeadCard();
   showBanner('🏁 完赛！', 2, '#ffd34d');
 }
 // 休闲模式下撞到障碍：绊一下——扣 20 分、震屏、短暂无敌闪烁，但游戏继续
@@ -1060,14 +1122,22 @@ function saveBest(){
   saveSave();   // 顺手把钱包/皮肤也存了
   updateShareUrl();   // 把最新纪录写进网址——随手转发就是挑战书
 }
-// 超级奖励时间：清空一切危险，金币铺天盖地下 6 秒
+// 超级奖励关：三种玩法轮换，每次进都有"这回轮到哪个"的开箱感
 function startBonus(){
+  bonusKind = bonusCount % 3;
+  bonusCount++;
   bonusUntil = bgTime + 6;
   nextBonusAt = game.coinCount + 100;  // 下次门槛从"当前数量"重新起算，奖励关永远不会连环触发
   taskProg('bonus', 1);
   obstacles.length = 0;
   pits.length = 0;
-  showBanner('✨ 超级奖励时间 ✨', 2.5, '#ffd34d');
+  const names = ['🌧 大头雨', '🕊 飞天黄金', '💥 狂暴冲撞'];
+  showBanner('✨ 超级奖励：' + names[bonusKind] + ' ✨', 2.5, '#ffd34d');
+  if(bonusKind === 1){        // 飞天黄金：直接起飞，上天吃金币长龙
+    power.type = 'fly'; power.total = 6; power.until = bonusUntil;
+  } else if(bonusKind === 2){ // 狂暴冲撞：全程冲刺，障碍墙撞个稀碎
+    power.type = 'dash'; power.total = 6; power.until = bonusUntil;
+  }
   setFace('joy', 2);
   sfx.power();
 }
@@ -1138,50 +1208,111 @@ function updateParticles(dt){
 /* ========== 10. 障碍物与金币的生成 ========== */
 // 设计原则：越高的障碍越窄，保证任何速度下都跳得过去（数值算过账，别随便改高度上限）
 // 新障碍要跑一段距离才解锁，开局先用基本三件套熟悉手感
-function spawnObstacle(){
-  const r = srand();
-  const d = game.runDist / 12;   // 换算成"米"（和屏幕上显示的得分同一个单位）
-  // 坑：约 9 秒后开始出现，唯一致命的东西！掉下去游戏直接结束
-  // （连跳角色在掉落瞬间还能空中跳自救，滑翔角色更是轻松飘过去）
-  if(d > 250 && srand() < 0.16){
-    // 新手教学：前 3 个坑固定窄坑 + 红色预警，第一次掉坑不该是"埋伏"
-    const teach = !dailyMode && (save.pitsSeen || 0) < 3;
-    pits.push({ x: W + 80, w: teach ? 70 : srange(70, 140), warn: teach });
-    if(teach){
-      save.pitsSeen = (save.pitsSeen || 0) + 1;
-      showBanner('⚠️ 前方有坑，跳过去！', 1.8, '#ff8aa0');
-    }
-    return;
-  }
-  let w, h, type;
-  if(d > 400 && r < 0.12){        type = 'spikes';   w = srange(56, 88); h = 20; }           // 约 12 秒后解锁：一排尖刺
-  else if(d > 800 && r < 0.24){   type = 'birdLow';  w = 36; h = 26; }                       // 约 22 秒后解锁：低空鸟，必须跳过
-  else if(d > 1300 && r < 0.32){  type = 'birdHigh'; w = 36; h = 26; }                       // 约 33 秒后解锁：高空鸟，贴地跑才安全，跳起来反而撞！
-  else if(d > 600 && r < 0.40){   type = 'pendulum'; w = 40; h = 30; }                       // 约 17 秒后解锁：大摆锤！看准摆动节奏再过
-  else if(r < 0.62){              type = 'rock';     w = srange(26, 46); h = srange(34, 52); } // 普通石头
-  else if(r < 0.83){              type = 'cactus';   w = srange(22, 32); h = srange(56, 78); } // 高瘦仙人掌
-  else {                          type = 'double';   w = srange(58, 72); h = srange(30, 48); } // 宽矮双石
+/* —— 障碍编排：不再单个随机刷，而是抽"手工设计的组合段"——
+   可识别的套路让玩家形成肌肉记忆，金币也参与冒险设计（坑上的弧线币）—— */
+const PATTERNS = [
+  { tier: 0, seq: [['rock', 0]] },
+  { tier: 0, seq: [['cactus', 0]] },
+  { tier: 0, seq: [['rock', 0], ['rock', 360]] },
+  { tier: 0, seq: [['double', 0]] },
+  { tier: 1, seq: [['pit', 0], ['coinsOver', -1]] },                      // 坑+坑上金币弧：勇者的甜头
+  { tier: 1, seq: [['spikes', 0], ['cactus', 380]] },
+  { tier: 1, seq: [['rock', 0], ['pit', 320], ['rock', 360]] },
+  { tier: 1, seq: [['cactus', 0], ['coinsLow', 240], ['cactus', 240]] },  // 两株仙人掌之间的贴地币：奖励不跳的胆量
+  { tier: 2, seq: [['pendulum', 0], ['coinsLine', 230]] },
+  { tier: 2, seq: [['birdLow', 0], ['rock', 400]] },
+  { tier: 2, seq: [['pit', 0], ['coinsOver', -1], ['birdLow', 460]] },
+  { tier: 2, seq: [['spikes', 0], ['pit', 300], ['coinsOver', -1]] },
+  { tier: 3, seq: [['birdHigh', 0], ['spikes', 340]] },
+  { tier: 3, seq: [['pendulum', 0], ['pendulum', 460]] },                 // 双摆锤：后期精英段
+  { tier: 3, seq: [['roller', 0]] },                                      // 滚石：贴地滚来，跳它！
+  { tier: 3, seq: [['pit', 0], ['pit', 330], ['coinsOver', -1]] },
+];
+let patQueue = [];          // 当前组合段里还没入场的元素
+let lastPitX = 0;           // 最近一个坑的中心（给"坑上金币弧"定位）
+function makeObstacle(type){
+  let w, h;
+  if(type === 'spikes'){        w = srange(56, 88); h = 20; }
+  else if(type === 'birdLow'){  w = 36; h = 26; }
+  else if(type === 'birdHigh'){ w = 36; h = 26; }
+  else if(type === 'pendulum'){ w = 40; h = 30; }
+  else if(type === 'roller'){   w = 36; h = 36; }
+  else if(type === 'rock'){     w = srange(26, 46); h = srange(34, 52); }
+  else if(type === 'cactus'){   w = srange(22, 32); h = srange(56, 78); }
+  else {                        w = srange(58, 72); h = srange(30, 48); }   // double
   const o = { x: W + 80, w: w, h: h, type: type };
-  if(type === 'birdLow'){  o.alt = 22; o.extraV = 60; }   // alt=离地高度，extraV=额外迎面飞来的速度
+  if(type === 'birdLow'){  o.alt = 22; o.extraV = 60; }
   if(type === 'birdHigh'){ o.alt = 62; o.extraV = 60; }
+  if(type === 'roller'){   o.extraV = 140; o.roll = 0; }   // 滚石：朝你滚来，可跳可撞碎
   if(type === 'pendulum'){ o.pivotY = 58; o.len = 160; o.phase = srand() * TAU; }
   obstacles.push(o);
-  // 鸟和金币不能挨在一起：金币会诱导玩家跳起，正好撞上"不该跳"的高空鸟
+  // 空中障碍/摆锤附近清掉散币和道具，别诱人送死（设计好的冒险币 brave 除外）
   if(o.alt){
     for(let i = coins.length - 1; i >= 0; i--){
-      if(Math.abs(coins[i].x - o.x) < 260) coins.splice(i, 1);
+      if(!coins[i].brave && Math.abs(coins[i].x - o.x) < 260) coins.splice(i, 1);
     }
   }
-  // 摆锤的摆程会扫到金币/道具的高度带：把附近已有的金币和道具清掉，别诱人送死
   if(type === 'pendulum'){
     const px = o.x + 20;
     for(let i = coins.length - 1; i >= 0; i--){
-      if(Math.abs(coins[i].x - px) < 200) coins.splice(i, 1);
+      if(!coins[i].brave && Math.abs(coins[i].x - px) < 200) coins.splice(i, 1);
     }
     for(let i = items.length - 1; i >= 0; i--){
       if(Math.abs(items[i].x - px) < 200) items.splice(i, 1);
     }
   }
+}
+function spawnPatternCoins(kind, refX){
+  if(kind === 'coinsOver'){        // 坑口上方的弧线币：吃到+安全落地=双倍快感
+    for(let i = 0; i < 5; i++){
+      coins.push({ x: refX - 50 + i * 32, y: 150 - Math.sin(i / 4 * Math.PI) * 26, phase: Math.random() * TAU, brave: true });
+    }
+  } else if(kind === 'coinsLow'){  // 贴地币：奖励"忍住不跳"的胆量
+    coins.push({ x: refX, y: GROUND_Y - 26, phase: Math.random() * TAU, brave: true });
+  } else {                         // coinsLine：普通直线币
+    for(let i = 0; i < 4; i++){
+      coins.push({ x: refX + i * 34, y: 152, phase: Math.random() * TAU, brave: true });
+    }
+  }
+}
+function spawnObstacle(){
+  const d = game.runDist / 12;   // 米
+  // 新手教学坑（前 3 个）：窄坑 + 预警，独立于编排系统
+  if(!dailyMode && (save.pitsSeen || 0) < 3 && d > 250 && srand() < 0.2){
+    pits.push({ x: W + 80, w: 70, warn: true });
+    save.pitsSeen = (save.pitsSeen || 0) + 1;
+    showBanner('⚠️ 前方有坑，跳过去！', 1.8, '#ff8aa0');
+    return;
+  }
+  if(!patQueue.length){
+    // 抽一个适合当前里程的组合段（前期只抽简单段）
+    const tier = d > 2600 ? 3 : d > 1300 ? 2 : d > 500 ? 1 : 0;
+    const pool = PATTERNS.filter(p => p.tier <= tier);
+    patQueue = pool[Math.floor(srand() * pool.length)].seq.slice();
+  }
+  // 元素入场；同段后续元素按设计间距排队（高速时稍微拉开，保证跳跃可行）
+  const el = patQueue.shift();
+  if(el[0] === 'pit'){
+    const pw = srange(80, 130);
+    pits.push({ x: W + 80, w: pw });
+    lastPitX = W + 80 + pw / 2;
+  } else if(el[0].indexOf('coins') === 0){
+    spawnPatternCoins(el[0], el[0] === 'coinsOver' ? lastPitX : W + 80);
+  } else {
+    makeObstacle(el[0]);
+  }
+  while(patQueue.length && patQueue[0][1] <= 0){   // 间距 ≤0 = 贴着上一个元素立刻放
+    const el2 = patQueue.shift();
+    if(el2[0].indexOf('coins') === 0) spawnPatternCoins(el2[0], lastPitX);
+    else makeObstacle(el2[0]);
+  }
+  if(patQueue.length){
+    distToObstacle = patQueue[0][1] * Math.max(1, game.speed / 480);
+    return;
+  }
+  // 段落结束：到下一段的间距用原公式（含密度递增）
+  const densK = Math.max(0.65, 1 - d / 9000);
+  distToObstacle = (game.speed * (power.type === 'dash' ? 1.8 : 1) * 0.6 + 280 + srand() * 320) * densK;
 }
 function spawnCoins(){
   // 屏幕右侧附近有鸟或摆锤时先不发金币，过 250px 再试（理由见 spawnObstacle 里的注释）
@@ -1198,6 +1329,12 @@ function spawnCoins(){
       y: baseY - Math.sin(t * Math.PI) * arc,     // 排成一道小弧线
       phase: Math.random() * TAU,
     });
+  }
+}
+// 飞天黄金：高空一条起伏的金币长龙（飞行高度刚好吃到）
+function spawnSkyGold(){
+  for(let i = 0; i < 4; i++){
+    coins.push({ x: W + 60 + i * 38, y: 135 + Math.sin((bgTime * 2 + i) * 1.3) * 18, phase: Math.random() * TAU });
   }
 }
 // 超级奖励关专属："大头"从天而降（戴着真人头像时下的就是你的脸！），吃一个 +20 表现分
@@ -1236,7 +1373,19 @@ function obstacleBoxes(o){
     const b = pendulumBall(o);
     return [{ x: b.x - 15, y: b.y - 15, w: 30, h: 30 }];   // 只有锤头能撞到人，链条不算
   }
+  if(o.type === 'meteor'){
+    const my = meteorY(o);
+    if(my === null) return [];               // 还在天上预警，只有影子，不碰撞
+    return [{ x: o.x + 4, y: my - 26, w: 22, h: 26 }];
+  }
   return [ hitbox(o.x, o.w, o.h, o.alt) ];
+}
+// 流星当前的"底部 y"：预警期（只有影子）返回 null；坠落 0.45 秒；落地后停留
+function meteorY(o){
+  const t = bgTime - o.dropAt;
+  if(t < 0) return null;
+  if(t < 0.45) return -40 + (GROUND_Y + 40) * (t / 0.45);
+  return GROUND_Y;
 }
 // 玩家脚底中心是否悬在坑上（坑的左右各留 8px 的边，站在坑沿上不算掉）
 function overPit(){
@@ -1265,6 +1414,20 @@ function activatePower(type){
     setFace('joy', 1.0);
     sfx.power();
     floatText(player.x + player.w / 2, player.y - player.h - 24, '护盾！', POWER_INFO.shield.color);
+    return;
+  }
+  if(type === 'magnet'){   // 收益系走独立计时器，不挤占移动系道具（捡到不再"亏"）
+    magnetTotal = POWER_DUR.magnet + save.durLevel * 1.5;
+    magnetUntil = bgTime + magnetTotal;
+    setFace('joy', 1.2); sfx.power();
+    floatText(player.x + player.w / 2, player.y - player.h - 24, '磁铁！', POWER_INFO.magnet.color);
+    return;
+  }
+  if(type === 'coinx2'){
+    coinx2Total = POWER_DUR.coinx2 + save.durLevel * 1.5;
+    coinx2Until = bgTime + coinx2Total;
+    setFace('joy', 1.2); sfx.power();
+    floatText(player.x + player.w / 2, player.y - player.h - 24, '双倍金币！', POWER_INFO.coinx2.color);
     return;
   }
   power.type = type;
@@ -1308,7 +1471,8 @@ function update(dt){
   const tier = bgmTier();
   if(tier !== curBgmTier){
     curBgmTier = tier;
-    if(tier > 0) showBanner('🎵 第' + (tier + 1) + '乐章：节奏加快！', 2, '#9ff3ff');
+    if(tier === 1) showBanner('🏜️ 进入沙漠！节奏加快', 2.2, '#ffd9a0');
+    else if(tier === 2) showBanner('❄️ 进入雪夜！最终乐章', 2.2, '#bfe3ff');
   }
   if(power.type && bgTime > power.until){
     // 冲刺/变大结束的瞬间给 0.6 秒缓冲无敌：免得"差一帧就能撞碎"的障碍贴脸把你绊倒
@@ -1317,6 +1481,15 @@ function update(dt){
     }
     power.type = null;   // 道具到点失效
   }
+
+  // 组合技：冲刺 × 双倍金币 = ⚡黄金风暴（撞碎 +5）
+  const stormNow = power.type === 'dash' && bgTime < coinx2Until;
+  if(stormNow && !goldStorm){
+    goldStorm = true;
+    showBanner('⚡ 黄金风暴！撞碎奖励 +5', 2.2, '#ffd34d');
+    sfx.power();
+  }
+  if(!stormNow) goldStorm = false;
 
   game.speed = Math.min(SPEED_MAX, game.speed + SPEED_RAMP * dt);
   // 冲刺道具生效时世界加速 1.8 倍（相对地，就是狐狸在狂奔）
@@ -1330,20 +1503,30 @@ function update(dt){
 
   // 生成障碍：间距随速度变大（速度越快，留给反应的距离越长）
   if(!inBonus) distToObstacle -= move;
-  if(distToObstacle <= 0){
-    spawnObstacle();
-    // 用"有效速度"（冲刺时 ×1.8）算间距；跑得越远障碍越密（最低压到 65%）
-    const densK = Math.max(0.65, 1 - (game.runDist / 12) / 9000);
-    distToObstacle = (game.speed * (power.type === 'dash' ? 1.8 : 1) * 0.6 + 280 + srand() * 320) * densK;
+  if(!inBonus && distToObstacle <= 0){
+    spawnObstacle();   // 组合段编排：函数内部自己安排好下一个间距
   }
   distToCoin -= move;
   if(distToCoin <= 0){
-    if(inBonus){ spawnBigheads(); distToCoin = 150; }   // 奖励关下"大头雨"：吃了全是表现分
+    if(inBonus){
+      if(bonusKind === 1){ spawnSkyGold(); distToCoin = 120; }    // 飞天黄金：高空金币长龙
+      else if(bonusKind === 2){ distToCoin = 200; }               // 狂暴冲撞：奖励是可撞碎的墙
+      else { spawnBigheads(); distToCoin = 150; }                 // 大头雨
+    }
     else { spawnCoins(); distToCoin = 600 + srand() * 700; }
+  }
+  // 狂暴冲撞专属：奖励关里持续刷"撞碎就加分的墙"
+  if(inBonus && bonusKind === 2){
+    distToObstacle -= move;
+    if(distToObstacle <= 0){
+      obstacles.push({ x: W + 80, w: 34, h: 40 + Math.random() * 30, type: 'rock' });
+      distToObstacle = 230;
+    }
   }
 
   // 所有东西向左移动，出了屏幕就清理掉
   for(let i = obstacles.length - 1; i >= 0; i--){
+    if(obstacles[i].type === 'meteor' && bgTime > obstacles[i].dropAt + 2){ obstacles.splice(i, 1); continue; }   // 流星烧完即散
     obstacles[i].x -= move + (obstacles[i].extraV || 0) * dt;   // 鸟有额外的迎面飞行速度
     const margin = obstacles[i].type === 'pendulum' ? 260 : 60;   // 摆锤会甩得很远，晚点再清
     if(obstacles[i].x + obstacles[i].w < -margin) obstacles.splice(i, 1);
@@ -1386,7 +1569,7 @@ function update(dt){
       }
       if(smashed){
         obstacles.splice(i, 1);
-        game.bonus += 2;
+        game.bonus += goldStorm ? 5 : 2;
         game.shake = Math.max(game.shake, 5);
         setFace('joy', 0.5);   // 撞碎东西很爽！
         taskProg('smash', 1);
@@ -1396,7 +1579,7 @@ function update(dt){
         const fxX = fb ? fb.x : o.x + o.w / 2;
         const fxY = fb ? fb.y : GROUND_Y - (o.alt || 0) - o.h / 2;
         burst(fxX, fxY, 14, ['#cfd8c2', '#8fa07e', '#ffffff']);
-        floatText(fxX, fxY - 18, '+2', '#b8ffb0');
+        floatText(fxX, fxY - 18, goldStorm ? '+5' : '+2', '#b8ffb0');
       }
     }
   } else if(bgTime >= invulnUntil){   // 刚撞过的短暂无敌期内，不再重复判定
@@ -1426,6 +1609,16 @@ function update(dt){
       taskProg('items', 1);
       burst(it.x, it.y, 10, [POWER_INFO[it.type].color, '#ffffff']);
     }
+  }
+
+  // ☄️ 流星雨：5000 米后的专属事件（日赛不触发，保证同图）
+  if(!dailyMode && !inBonus && game.runDist / 12 >= nextMeteorAt){
+    nextMeteorAt = game.runDist / 12 + 800 + Math.random() * 400;
+    showBanner('☄️ 流星雨来袭！盯住地上的阴影', 2.2, '#ff8a5c');
+    for(let i = 0; i < 3; i++){
+      obstacles.push({ type: 'meteor', x: W + 200 + i * 240, w: 30, h: 30, dropAt: bgTime + 1.2 + i * 0.35 });
+    }
+    sfx.hit();
   }
 
   // 钻石兔：神出鬼没，追上摸到它就 +1 💎（日赛里不出，保证公平）
@@ -1474,7 +1667,7 @@ function update(dt){
   }
 
   // 磁铁（冲刺也自带吸金币，精灵的脉冲也走这里）：附近的金币自动飞过来
-  if(power.type === 'magnet' || power.type === 'dash' || power.type === 'fly' || bgTime < petPulseUntil){
+  if(bgTime < magnetUntil || power.type === 'dash' || power.type === 'fly' || bgTime < petPulseUntil){
     const mcx = player.x + player.w / 2, mcy = player.y - player.h / 2;
     for(const c of coins){
       const dx = mcx - c.x, dy = mcy - c.y;
@@ -1515,7 +1708,7 @@ function update(dt){
         floatText(c.x, c.y - 16, '+20分', '#ffb3f6');
         continue;
       }
-      let v = (power.type === 'coinx2') ? 2 : 1;   // 双倍金币道具：一枚顶两枚
+      let v = (bgTime < coinx2Until) ? 2 : 1;   // 双倍金币道具：一枚顶两枚
       if(weekendBoost()) v *= 2;                   // 周末活动：金币再双倍！
       game.coinCount += v;
       save.coins += v;
@@ -1529,8 +1722,18 @@ function update(dt){
     }
   }
 
-  // 得分 = 距离 + 金币奖励 + 撞碎奖励 - 撞障碍扣分（最低 0 分）
-  game.score = Math.max(0, Math.floor(game.runDist / 12) + game.coinCount * 5 + game.bonus - game.penalty);
+  // 得分 = 距离×里程倍率 + 金币奖励 + 撞碎奖励 - 撞障碍扣分（最低 0 分）
+  const meters = game.runDist / 12;
+  const distMult = 1 + Math.min(5, Math.floor(meters / 1000)) * 0.1;   // 每 1000 米距离分 +10%，深跑更值钱
+  game.score = Math.max(0, Math.floor(meters * distMult) + game.coinCount * 5 + game.bonus - game.penalty);
+  // 跨过整千米：撒花报喜
+  const mk = Math.floor(meters / 1000);
+  if(mk > game.milestone){
+    game.milestone = mk;
+    showBanner('🏁 ' + mk * 1000 + ' 米！距离分 ×' + (1 + Math.min(5, mk) * 0.1).toFixed(1), 2.2, '#ffd34d');
+    burst(player.x + player.w / 2, player.y - player.h - 10, 16, ['#ffd34d', '#ffffff']);
+    sfx.power();
+  }
   // 破纪录的那一瞬间：金色横幅 + 撒花！（日赛分数独立计算，不影响无尽纪录）
   if(!dailyMode && !game.recordShown && game.startBest > 0 && game.score > game.startBest){
     game.recordShown = true;
@@ -1658,7 +1861,27 @@ function skyPalette(){
   const mix = {};
   for(const k of ['top', 'bot', 'far', 'near', 'ground']) mix[k] = lerpColor(a[k], b[k], f);
   mix.night = clamp(1 - Math.abs(u - 2.5), 0, 1);   // 0=白天 1=深夜（控制星星和夜色）
+  // 生物群系：2500 米进沙漠、5000 米进雪夜（与三段 BGM 同步），200 米渐变过渡
+  const bm = game.state === 'playing' ? game.runDist / 12 : 0;
+  const BIOME_TARGETS = [
+    null,
+    { far:'#d8a878', near:'#c08850', ground:'#e8c890', bot:'#ffe2b8' },                 // 沙漠
+    { far:'#8fa8c8', near:'#6e8cb8', ground:'#eef4fa', top:'#2c3a5e', bot:'#9fb8d0' },  // 雪夜
+  ];
+  const bt = bm >= 5000 ? 2 : bm >= 2500 ? 1 : 0;
+  if(bt > 0){
+    const into = clamp((bm - (bt === 1 ? 2500 : 5000)) / 200, 0, 1);
+    const target = BIOME_TARGETS[bt];
+    for(const k2 in target) mix[k2] = lerpColor(rgbToHex(mix[k2]), target[k2], into);
+  }
+  mix.biome = bt;
   return mix;
+}
+// lerpColor 需要 #rrggbb，而 mix 里已是 rgb(...) 字符串：转一下
+function rgbToHex(s){
+  if(s[0] === '#') return s;
+  const mm = s.match(/\d+/g);
+  return '#' + mm.slice(0, 3).map(x => (+x).toString(16).padStart(2, '0')).join('');
 }
 
 function drawBackground(pal){
@@ -1789,6 +2012,34 @@ function drawObstacles(){
       drawBird(o);
     } else if(o.type === 'pendulum'){
       drawPendulum(o);
+    } else if(o.type === 'roller'){
+      o.roll = (o.roll || 0) + 0.22;   // 滚石：带辐条的石轮，越滚越近
+      const rx = o.x + 18, ry = GROUND_Y - 18;
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath(); ctx.ellipse(rx, GROUND_Y + 3, 16, 4, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#7a6a58';
+      ctx.beginPath(); ctx.arc(rx, ry, 18, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(rx - 14 * Math.cos(o.roll), ry - 14 * Math.sin(o.roll));
+      ctx.lineTo(rx + 14 * Math.cos(o.roll), ry + 14 * Math.sin(o.roll));
+      ctx.moveTo(rx - 14 * Math.sin(o.roll), ry + 14 * Math.cos(o.roll));
+      ctx.lineTo(rx + 14 * Math.sin(o.roll), ry - 14 * Math.cos(o.roll));
+      ctx.stroke();
+    } else if(o.type === 'meteor'){
+      const my = meteorY(o);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';   // 落点阴影（先看到影子才公平）
+      ctx.beginPath(); ctx.ellipse(o.x + 15, GROUND_Y + 4, my === null ? 10 + (bgTime % 0.4) * 20 : 16, 5, 0, 0, TAU); ctx.fill();
+      if(my !== null){
+        if(my < GROUND_Y){   // 坠落拖尾
+          ctx.strokeStyle = 'rgba(255,155,75,0.6)'; ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.moveTo(o.x + 15, my - 44); ctx.lineTo(o.x + 15, my - 16); ctx.stroke();
+        }
+        ctx.fillStyle = '#c96a3a';
+        ctx.beginPath(); ctx.arc(o.x + 15, my - 13, 14, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#ff9b4b';
+        ctx.beginPath(); ctx.arc(o.x + 11, my - 16, 6, 0, TAU); ctx.fill();
+      }
     } else {
       rock(o.x, o.w, o.h);
     }
@@ -1918,7 +2169,7 @@ function drawItems(){
   }
 }
 function rock(x, w, h){
-  ctx.fillStyle = '#6e7d63';
+  ctx.fillStyle = ['#6e7d63', '#a8835a', '#9fb8cc'][curBiome] || '#6e7d63';   // 岩石颜色跟着生物群系换
   rr(x, GROUND_Y - h, w, h, Math.min(8, w / 3)); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.16)';
   rr(x + 3, GROUND_Y - h + 3, w * 0.4, h * 0.3, 3); ctx.fill();
@@ -2334,15 +2585,19 @@ function drawParticles(){
 
 /* ========== 13. 界面文字 ========== */
 function drawHUD(){
+  if(game.state === 'ready' && homeOpen()) return;   // 大厅开着时不画 HUD：一屏一焦点
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 4;
+  ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 4;
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+  // 亮色天空上白字看不清：HUD 文字一律先描边再填色
+  const hudText = (s, x, y) => { ctx.strokeText(s, x, y); ctx.fillText(s, x, y); };
   // —— 左上角：表现面板（大号分数 + 离目标还差多少） ——
   const breaking = !dailyMode && game.startBest > 0 && game.score > game.startBest && game.state !== 'ready';
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.fillStyle = breaking ? '#ffd34d' : '#fff';   // 破纪录时分数变金色
   ctx.font = 'bold 24px ' + FONT;
-  ctx.fillText('得分 ' + game.score, 16, 10);
-  ctx.font = '12px ' + FONT;
+  hudText('得分 ' + game.score, 16, 10);
+  ctx.font = 'bold 13px ' + FONT;
   let subLine, subColor;
   if(dailyMode){
     const drB = (save.dailyRun && save.dailyRun.date === todayStr()) ? save.dailyRun.best : 0;
@@ -2357,51 +2612,47 @@ function drawHUD(){
     subLine = '创造你的第一个纪录吧！'; subColor = '#c5cede';
   }
   ctx.fillStyle = subColor;
-  ctx.fillText(subLine, 16, 38);
+  hudText(subLine, 16, 38);
   // 金币 + 钻石
   ctx.fillStyle = '#ffd34d';
   ctx.beginPath(); ctx.arc(24, 64, 7, 0, TAU); ctx.fill();
   ctx.strokeStyle = '#d9a420'; ctx.lineWidth = 2; ctx.stroke();
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 16px ' + FONT;
-  ctx.fillText('× ' + save.coins, 38, 56);
-  const coinW = ctx.measureText('× ' + save.coins).width;
-  ctx.font = '11px ' + FONT;
-  ctx.fillStyle = '#ffe9c4';
-  ctx.fillText('钱包', 44 + coinW, 60);
-  ctx.font = 'bold 14px ' + FONT;
-  ctx.fillStyle = '#9ff3ff';
-  ctx.fillText('💎 ' + save.gems, 16, 78);
+  hudText('× ' + save.coins, 38, 56);
   // 奖励关倒计时钩子：就快攒够了！
   if(game.state === 'playing' && !dailyMode && bgTime >= bonusUntil && nextBonusAt - game.coinCount <= 10){
-    ctx.font = 'bold 11px ' + FONT;
+    ctx.font = 'bold 12px ' + FONT;
     ctx.fillStyle = '#ffd34d';
-    ctx.fillText('再吃 ' + Math.max(1, nextBonusAt - game.coinCount) + ' 枚 → ✨奖励关', 86, 80);
+    hudText('再吃 ' + Math.max(1, nextBonusAt - game.coinCount) + ' 枚 → ✨奖励关', 16, 78);
   }
-  // 道具剩余时间条
-  if(power.type){
-    const info = POWER_INFO[power.type];
-    const frac = clamp((power.until - bgTime) / power.total, 0, 1);
+  // 道具剩余时间条（移动系一条 + 磁铁/双倍金币各自一条，可同时挂多条）
+  let barY = 96;
+  const drawPBar = (name, color, frac) => {
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.fillRect(16, 100, 110, 9);
-    ctx.fillStyle = info.color;
-    ctx.fillRect(16, 100, 110 * frac, 9);
+    ctx.fillRect(16, barY, 110, 9);
+    ctx.fillStyle = color;
+    ctx.fillRect(16, barY, 110 * clamp(frac, 0, 1), 9);
     ctx.font = 'bold 12px ' + FONT;
     ctx.fillStyle = '#fff';
-    ctx.fillText(info.name, 132, 98);
-  }
+    hudText(name, 132, barY - 2);
+    barY += 15;
+  };
+  if(power.type) drawPBar(POWER_INFO[power.type].name, POWER_INFO[power.type].color, (power.until - bgTime) / power.total);
+  if(bgTime < magnetUntil) drawPBar('磁铁', POWER_INFO.magnet.color, (magnetUntil - bgTime) / magnetTotal);
+  if(bgTime < coinx2Until) drawPBar('双倍金币', POWER_INFO.coinx2.color, (coinx2Until - bgTime) / coinx2Total);
   // 最高分画在顶部正中：右上角的按钮是 HTML 元素，窗口变窄时会盖住右对齐的文字
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 17px ' + FONT;
   ctx.textAlign = 'center';
-  ctx.fillText(dailyMode ? '☀️ ' + Math.min(3000, Math.floor(game.runDist / 12)) + ' / 3000 米'
-                         : '最高 ' + game.best, W / 2, 14);
+  hudText(dailyMode ? '☀️ ' + Math.min(3000, Math.floor(game.runDist / 12)) + ' / 3000 米'
+                    : '最高 ' + game.best, W / 2, 14);
   // 中央大横幅（破纪录 / 奖励关 / 复活 / 抓到兔子）
   if(bgTime < banner.until){
     ctx.globalAlpha = Math.min(1, (banner.until - bgTime) / 0.4);
     ctx.font = 'bold 28px ' + FONT;
     ctx.fillStyle = banner.color;
-    ctx.fillText(banner.text, W / 2, 48);
+    hudText(banner.text, W / 2, 48);
     ctx.globalAlpha = 1;
   }
   ctx.restore();
@@ -2417,10 +2668,16 @@ function drawOverlay(){
 
   if(paused && game.state === 'playing'){
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 30px ' + FONT;
-    ctx.fillText('已暂停', W / 2, H / 2 - 12);
-    ctx.font = '15px ' + FONT;
-    ctx.fillText('按 P 或 空格 继续', W / 2, H / 2 + 24);
+    if(resumeUntil){   // 3-2-1：让玩家看清自己和障碍的位置再开跑
+      const cnt = Math.ceil((resumeUntil - performance.now()) / 500);
+      ctx.font = 'bold 64px ' + FONT;
+      ctx.fillText(String(Math.max(1, cnt)), W / 2, H / 2);
+    } else {
+      ctx.font = 'bold 30px ' + FONT;
+      ctx.fillText('已暂停', W / 2, H / 2 - 12);
+      ctx.font = '15px ' + FONT;
+      ctx.fillText('点击屏幕 / 按 P 继续', W / 2, H / 2 + 24);
+    }
     return;
   }
   if(game.state === 'ready'){
@@ -2446,54 +2703,7 @@ function drawOverlay(){
       ctx.fillText('⚔️ ' + challenge.name + ' 向你发起挑战：' + challenge.score + ' 分', W / 2, H / 2 + 84);
     }
   } else if(game.state === 'dead'){
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 32px ' + FONT;
-    ctx.fillText(dailyMode && game.deathBy === 'finish' ? '🏁 完赛！' : '游戏结束', W / 2, H / 2 - 56);
-    // 副标题：差点破纪录（最强的"再来一局"理由）> 死因提示
-    if(!dailyMode && !game.newBest && game.startBest > 0 && game.score >= game.startBest * 0.85){
-      ctx.fillStyle = '#ffd34d';
-      ctx.font = 'bold 16px ' + FONT;
-      ctx.fillText('就差 ' + (game.startBest - game.score + 1) + ' 分破纪录！复活冲一把？', W / 2, H / 2 - 33);
-    } else if(game.deathBy === 'pit'){
-      ctx.fillStyle = '#aab6d0';
-      ctx.font = '13px ' + FONT;
-      ctx.fillText('掉进坑里啦！看到坑要跳过去～', W / 2, H / 2 - 33);
-    }
-    ctx.fillStyle = '#ffd34d';
-    ctx.font = 'bold 21px ' + FONT;
-    ctx.fillText('得分 ' + game.score + (game.newBest && !dailyMode ? '   🎉 新纪录！' : ''), W / 2, H / 2 - 12);
-    ctx.font = '13px ' + FONT;
-    ctx.fillStyle = '#aab6d0';
-    if(dailyMode){
-      const dr = (save.dailyRun && save.dailyRun.date === todayStr()) ? save.dailyRun : { best: 0, tries: 0 };
-      const stars = dr.best >= 1500 ? '⭐⭐⭐' : dr.best >= 1000 ? '⭐⭐' : dr.best >= 600 ? '⭐' : '';
-      ctx.fillText('今日最佳 ' + dr.best + ' 分 ' + stars + ' · 第 ' + dr.tries + ' 次尝试 · 复制战绩发群里，群友就是排行榜', W / 2, H / 2 + 10);
-    } else {
-      const doneN = (save.daily && save.daily.date === todayStr()) ? save.daily.tasks.filter(t => t.done).length : 0;
-      let line2 = '本局金币 +' + game.coinCount + ' · 最高纪录 ' + game.best + ' · 今日任务 ' + doneN + '/3';
-      if(challenge && game.score > challenge.score) line2 = '⚔️ 你以 ' + game.score + ' 分击败了 ' + challenge.name + '！点右上角"···"转发回去';
-      ctx.fillText(line2, W / 2, H / 2 + 10);
-      // 下一个目标进度条：差多少金币就能解锁新伙伴
-      const goal = nextGoal();
-      if(goal){
-        const gw = 240, gx = W / 2 - gw / 2, gy = H / 2 + 28;
-        const frac = clamp(save.coins / goal.price, 0, 1);
-        ctx.fillStyle = 'rgba(255,255,255,0.18)';
-        rr(gx, gy, gw, 12, 6); ctx.fill();
-        ctx.fillStyle = frac >= 1 ? '#ffd34d' : '#7fb3ff';
-        rr(gx, gy, Math.max(8, gw * frac), 12, 6); ctx.fill();
-        ctx.font = 'bold 12px ' + FONT;
-        ctx.fillStyle = frac >= 1 ? '#ffd34d' : '#dfe6f5';
-        ctx.fillText(frac >= 1 ? '💰 金币够了！打开商店（🛒 或按 B），把「' + goal.label + '」接回家'
-                               : '下一个目标：' + goal.label + '　' + save.coins + ' / ' + goal.price,
-                     W / 2, gy + 22);
-      }
-    }
-    if(bgTime - game.deadAt > 0.45){
-      ctx.fillStyle = '#fff';
-      ctx.font = '15px ' + FONT;
-      ctx.fillText('按 空格 / 点击屏幕 再来一次', W / 2, H / 2 + 72);
-    }
+    // 结算文字都在 DOM 卡片（#deadCard）里，这里只保留遮罩和角色倒地的画面
   }
 }
 
@@ -2506,6 +2716,7 @@ function render(){
     ctx.translate(rand(-1, 1) * game.shake * 0.5, rand(-1, 1) * game.shake * 0.5);
   }
   const pal = skyPalette();
+  curBiome = pal.biome || 0;
   drawBackground(pal);
   drawPits();
   drawObstacles();
@@ -2565,12 +2776,12 @@ function renderShop(){
       info = '<b>' + ch.name + '</b>' + chips + '<small>' + ch.desc + '</small>';
       if(save.char === g.id)             btn = '<button disabled>出战中</button>';
       else if(save.chars.includes(g.id)) btn = '<button data-act="wear" data-id="' + g.id + '">出战</button>';
-      else                               btn = '<button data-act="buy" data-id="' + g.id + '">' + ch.price + ' 金币</button>';
+      else                               btn = '<button data-act="buy" data-id="' + g.id + '" class="' + (save.coins < ch.price ? 'cant' : '') + '">' + ch.price + ' 金币</button>';
     } else {
       prev = '<div class="shop-prev">⏱️</div>';
       info = '<b>' + g.name + '</b><small>' + g.desc + '</small>';
       if(save.durLevel >= g.prices.length) btn = '<button disabled>已满级</button>';
-      else btn = '<button data-act="up" data-id="' + g.id + '">升级 ' + g.prices[save.durLevel] + ' 金币</button>';
+      else btn = '<button data-act="up" data-id="' + g.id + '" class="' + (save.coins < g.prices[save.durLevel] ? 'cant' : '') + '">升级 ' + g.prices[save.durLevel] + ' 金币</button>';
       btn = '<span style="color:#97a1b8;font-size:12px;">Lv ' + save.durLevel + '/' + g.prices.length + '&nbsp;</span>' + btn;
     }
     html += '<div class="shop-row">' + prev +
@@ -2600,7 +2811,7 @@ function renderShop(){
   for(const g2 of gemGoods){
     const btn2 = save[g2.id]
       ? '<button disabled>已拥有</button>'
-      : '<button data-act="gem-buy" data-id="' + g2.id + '">' + g2.cost + ' 💎</button>';
+      : '<button data-act="gem-buy" data-id="' + g2.id + '" class="' + (save.gems < g2.cost ? 'cant' : '') + '">' + g2.cost + ' 💎</button>';
     html += '<div class="shop-row"><div class="shop-prev">' + g2.emoji + '</div>' +
             '<div class="grow"><b>' + g2.name + '</b><span class="chip" style="background:#23bcc9">钻石专属</span>' +
             '<small>' + g2.desc + '</small></div>' +
@@ -2619,7 +2830,7 @@ function renderShop(){
       const on = save.skinOn[cid] === sk.id;
       sw += owned
         ? '<button data-act="skin-wear" data-cid="' + cid + '" data-sid="' + sk.id + '"' + (on ? ' disabled' : '') + '>' + (on ? sk.name + ' ✓' : '穿' + sk.name) + '</button> '
-        : '<button data-act="skin-buy" data-cid="' + cid + '" data-sid="' + sk.id + '">' + sk.name + ' ' + sk.price + '💎</button> ';
+        : '<button data-act="skin-buy" data-cid="' + cid + '" data-sid="' + sk.id + '" class="' + (save.gems < sk.price ? 'cant' : '') + '">' + sk.name + ' ' + sk.price + '💎</button> ';
     }
     html += '<div class="shop-row"><canvas class="shop-prev" width="72" height="56" data-char="' + cid + '"></canvas>' +
             '<div class="grow"><b>' + CHARS[cid].name + '</b><small>' + sw + '</small></div></div>';
@@ -2725,6 +2936,10 @@ function toggleShop(show){
     shopEl.classList.remove('hidden');
   } else {
     shopEl.classList.add('hidden');
+    if(game.state === 'playing' && paused && !resumeUntil){
+      resumeUntil = performance.now() + 1500;   // 关店直接进 3-2-1，省掉一个"已暂停"页
+    }
+    if(game.state === 'ready' && homeOpen()) renderHome();   // 买完东西回大厅刷新余额
   }
 }
 // 头像上传：读取照片 → 居中裁成正方形、缩到 128px → 存进存档
@@ -2825,15 +3040,41 @@ function renderHome(){
   document.getElementById('homeStats').innerHTML =
     '最高 ' + game.best + ' 分 · 💰' + save.coins + ' · 💎' + save.gems +
     (save.streak ? ' · 已连签 ' + save.streak + ' 天' : '') +
-    (weekendBoost() ? '<br>🎉 周末狂欢：金币双倍进行中！' : '');
+    (weekendBoost() ? '<br>🎉 周末狂欢：金币双倍进行中！' : '') +
+    (challenge ? '<br>⚔️ ' + challenge.name + ' 向你发起挑战：' + challenge.score + ' 分' : '');
+  document.getElementById('nickInput').value = save.nick || '';
   document.getElementById('signDot').classList.toggle('hidden', !canClaimSign());
-  const opts = [{ k: 300, cost: 80 }, { k: 500, cost: 150 }, { k: 1000, cost: 300 }];
-  let bh = '<div class="bTitle">出发加成（花金币买，仅下一局生效，再点一次取消退款）：</div>';
-  for(const o2 of opts){
-    bh += '<button data-boost="' + o2.k + '" data-cost="' + o2.cost + '" class="' + (pendingSprint === o2.k ? 'on' : '') + '">🚀 冲刺 ' + o2.k + ' 米 · ' + o2.cost + '💰</button>';
+  // 开始按钮回显已选加成：钱花到位了，看得见
+  document.getElementById('homeStart').textContent =
+    '▶️ 开始游戏' + (pendingSprint ? ' · 🚀' + pendingSprint + '米' : '') + (pendingShield ? ' · 🛡' : '');
+  // 今日任务：目标看得见，才有"再来一局"的劲
+  const ht = document.getElementById('homeTasks');
+  if(save.runs > 0 && save.daily && save.daily.date === todayStr()){
+    let th = '<div class="bTitle">📋 今日任务（全清 +1💎）</div>';
+    for(const t of save.daily.tasks){
+      th += '<div class="tline' + (t.done ? ' done' : '') + '"><span>' + (t.done ? '✅ ' : '◻ ') + taskName(t) +
+            '</span><span>' + Math.min(t.prog, t.goal) + '/' + t.goal + '</span></div>';
+    }
+    ht.innerHTML = th; ht.style.display = '';
+  } else ht.style.display = 'none';
+  // 出发加成：第一局先藏起来（渐进披露）；买不起的灰显并写明差额
+  const hb = document.getElementById('homeBoosts');
+  document.getElementById('homeDaily').style.display = save.runs > 0 ? '' : 'none';
+  if(!save.runs){ hb.style.display = 'none'; }
+  else {
+    hb.style.display = '';
+    const opts = [{ k: 300, cost: 80 }, { k: 500, cost: 150 }, { k: 1000, cost: 300 }];
+    let bh = '<div class="bTitle">出发加成（仅下一局生效，再点一次取消退款）：</div>';
+    for(const o2 of opts){
+      const can = pendingSprint === o2.k || save.coins >= o2.cost;
+      bh += '<button data-boost="' + o2.k + '" data-cost="' + o2.cost + '" class="' +
+            (pendingSprint === o2.k ? 'on' : (can ? '' : 'cant')) + '">🚀 冲刺 ' + o2.k + ' 米 · ' +
+            (can ? o2.cost + '💰' : '还差' + (o2.cost - save.coins) + '💰') + '</button>';
+    }
+    const canS = pendingShield || save.coins >= 60;
+    bh += '<button data-boost="shield" data-cost="60" class="' + (pendingShield ? 'on' : (canS ? '' : 'cant')) + '">🛡 开局护盾 · ' + (canS ? '60💰' : '还差' + (60 - save.coins) + '💰') + '</button>';
+    hb.innerHTML = bh;
   }
-  bh += '<button data-boost="shield" data-cost="60" class="' + (pendingShield ? 'on' : '') + '">🛡 开局护盾 · 60💰</button>';
-  document.getElementById('homeBoosts').innerHTML = bh;
 }
 document.getElementById('homeBoosts').addEventListener('click', e => {
   const b = e.target.closest('button');
@@ -2856,14 +3097,59 @@ document.getElementById('homeBoosts').addEventListener('click', e => {
   }
   saveSave(); renderHome();
 });
+const deadEl = document.getElementById('dead');
+// 把这一局的结算信息填进 DOM 卡片
+function updateDeadCard(){
+  const finish = dailyMode && game.deathBy === 'finish';
+  document.getElementById('deadTitle').textContent = finish ? '🏁 完赛！' : '游戏结束';
+  const nearMiss = !dailyMode && !game.newBest && game.startBest > 0 && game.score >= game.startBest * 0.85;
+  document.getElementById('deadSub').textContent =
+    nearMiss ? '就差 ' + (game.startBest - game.score + 1) + ' 分破纪录！' :
+    (game.newBest && !dailyMode ? '🎉 新纪录！' : (game.deathBy === 'pit' ? '掉进坑里啦，看到坑要跳～' : ''));
+  document.getElementById('deadScore').textContent = game.score + ' 分';
+  let stats;
+  if(dailyMode){
+    const dr = (save.dailyRun && save.dailyRun.date === todayStr()) ? save.dailyRun : { best: 0, tries: 0 };
+    const stars = dr.best >= 1500 ? '⭐⭐⭐' : dr.best >= 1000 ? '⭐⭐' : dr.best >= 600 ? '⭐' : '';
+    stats = '今日最佳 ' + dr.best + ' 分 ' + stars + ' · 第 ' + dr.tries + ' 次尝试<br>复制战绩发到群里，群友就是排行榜';
+  } else {
+    const doneN = (save.daily && save.daily.date === todayStr()) ? save.daily.tasks.filter(t => t.done).length : 0;
+    stats = '本局金币 +' + game.coinCount + ' · 最高纪录 ' + game.best + ' · 今日任务 ' + doneN + '/3';
+    if(challenge && game.score > challenge.score) stats += '<br>⚔️ 击败了 ' + challenge.name + '！转发链接回去让他好看';
+  }
+  document.getElementById('deadStats').innerHTML = stats;
+  const goalEl = document.getElementById('deadGoal');
+  const goal = dailyMode ? null : nextGoal();
+  if(goal){
+    const frac = clamp(save.coins / goal.price, 0, 1);
+    goalEl.innerHTML = '<div class="gbar"><div class="gfill' + (frac >= 1 ? ' full' : '') + '" style="width:' + (frac * 100).toFixed(1) + '%"></div></div>' +
+      '<div class="gtxt">' + (frac >= 1 ? '💰 金币够了！去商店把「' + goal.label + '」接回家'
+                                        : '下一个目标：' + goal.label + '　' + save.coins + ' / ' + goal.price) + '</div>';
+    goalEl.style.display = '';
+  } else goalEl.style.display = 'none';
+}
 function goHome(){
   dailyMode = false;
   game.state = 'ready';
   resetPlayer();
   renderHome();
   homeEl.classList.remove('hidden');
+  // 玩了两局还没设头像：回大厅这个"闲时"再邀请（绝不在结算页打断玩家）
+  if(save.runs >= 2 && !save.avatar && !save.skippedAvatar){
+    startAfterAvatar = false;
+    avatarAskEl.classList.remove('hidden');
+  }
 }
 homeBtn.addEventListener('click', function(){ goHome(); this.blur(); });
+document.getElementById('nickInput').addEventListener('change', function(){
+  save.nick = String(this.value || '').slice(0, 12);
+  saveSave(); updateShareUrl();
+});
+document.getElementById('againBtn').addEventListener('click', function(){
+  ensureAudio();
+  startGame();   // 日赛模式下 = 重试今日挑战
+  this.blur();
+});
 document.getElementById('homeStart').addEventListener('click', function(){
   ensureAudio();
   homeEl.classList.add('hidden');
@@ -2916,36 +3202,33 @@ function frame(t){
   // 算出负数会让游戏时钟倒流直接崩溃，所以下限卡在 0
   const dt = Math.max(0, Math.min((t - last) / 1000, 0.05));
   last = t;
+  if(paused && resumeUntil && performance.now() >= resumeUntil){
+    paused = false; resumeUntil = 0;   // 倒计时结束，正式续跑
+  }
   if(!paused) update(dt);
   render();
   if(shopOpen()) updateShopPreviews();   // 商店开着时，让货架上的小动物动起来
-  const pIcon = paused ? '▶️' : '⏸️';    // 暂停按钮的图标跟着状态变
-  if(pauseBtn.textContent !== pIcon) pauseBtn.textContent = pIcon;
-  // 复活按钮：死亡且（首次免费 或 金币够）时出现（日赛里不能复活）
-  const revFree = !save.freeReviveUsed;
-  const revCost = 200 * (reviveCount + 1);
-  const showRev = game.state === 'dead' && !dailyMode && (revFree || save.coins >= revCost) && !shopOpen();
-  reviveBtn.classList.toggle('hidden', !showRev);
-  if(showRev){
-    const nearTxt = (!game.newBest && game.startBest > 0 && game.score >= game.startBest * 0.85) ? '，冲纪录！' : '';
-    const revTxt = revFree ? '🎁 新手专享：免费复活！' : '💰 花 ' + revCost + ' 金币复活' + nearTxt;
-    if(reviveBtn.textContent !== revTxt) reviveBtn.textContent = revTxt;
+  const pIcon = paused ? 'play' : 'pause';   // 暂停按钮的图标跟着状态变
+  if(pauseBtn.dataset.icon !== pIcon){
+    pauseBtn.dataset.icon = pIcon;
+    pauseBtn.innerHTML = pIcon === 'play' ? SVG_PLAY : SVG_PAUSE;
   }
-  // 今日挑战按钮：开始界面（大厅关着时）显示；日赛结算后变成"回主页"
-  const dShow = !shopOpen() && ((game.state === 'ready' && !homeOpen()) || (game.state === 'dead' && dailyMode));
-  dailyBtn.classList.toggle('hidden', !dShow);
-  if(dShow){
-    const dTxt = (dailyMode && game.state === 'dead') ? '🏠 回主页' : '☀️ 今日挑战';
-    if(dailyBtn.textContent !== dTxt) dailyBtn.textContent = dTxt;
+  // 死亡结算：DOM 卡片统一承载（死后 0.6 秒淡入，先看清自己怎么死的）
+  const showDead = game.state === 'dead' && bgTime - game.deadAt > 0.6 && !shopOpen();
+  deadEl.classList.toggle('hidden', !showDead);
+  if(showDead){
+    const revFree = !save.freeReviveUsed;
+    const revCost = 200 * (reviveCount + 1);
+    const showRev = !dailyMode && (revFree || save.coins >= revCost);
+    reviveBtn.classList.toggle('hidden', !showRev);
+    if(showRev){
+      const nearTxt = (!game.newBest && game.startBest > 0 && game.score >= game.startBest * 0.85) ? '，冲纪录！' : '';
+      const revTxt = revFree ? '🎁 新手专享：免费复活！' : '💰 花 ' + revCost + ' 金币复活' + nearTxt;
+      if(reviveBtn.textContent !== revTxt) reviveBtn.textContent = revTxt;
+    }
+    copyBtn.classList.toggle('hidden', !dailyMode);
   }
-  // 主页按钮：普通模式结算后出现
-  homeBtn.classList.toggle('hidden', !(game.state === 'dead' && !dailyMode && !shopOpen()));
-  // 复制战绩按钮：日赛结算时出现
-  const cShow = game.state === 'dead' && dailyMode && !shopOpen();
-  copyBtn.classList.toggle('hidden', !cShow);
-  if(cShow && copyBtn.textContent.indexOf('已复制') < 0 && copyBtn.textContent !== '📋 复制战绩发群里'){
-    copyBtn.textContent = '📋 复制战绩发群里';
-  }
+  dailyBtn.classList.toggle('hidden', true);   // 旧的悬浮入口退役（入口都在大厅和结算卡里）
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
