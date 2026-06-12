@@ -70,23 +70,45 @@ wx.onHide(function(){
   saveBest();
   stopBGM();
 });
-wx.onShow(function(){ appHidden = false; });
+wx.onShow(function(res){
+  appHidden = false;
+  // 【小游戏改造】热启动带的新参数只出现在这里（后台时点了好友的挑战卡片）
+  if(res && res.query) parseChallengeQuery(res.query);
+});
 
 // 触摸事件统一交给 UI 层分发（按下=点按钮/跳，移动=商店列表滚动，松开=收跳）
 // 【小游戏改造】传给 UI 的是"设备像素坐标"（clientX × dpr），和 UI.zones 登记的按钮坐标同一套；
 // 游戏内的跳跃不看坐标，所以不用再换算成游戏世界坐标了
+// 多指防错乱：永远跟踪"最新按下的那根手指"。changedTouches 才是本次新按下的，
+// touches[0] 是最早按下还没抬起的旧手指——用它会把旧手指的坐标错挂到新点击上
+let activeTouchId = null;
+function touchOf(list, id){
+  if(!list) return null;
+  for(let i = 0; i < list.length; i++){
+    const t = list[i];
+    if((t.identifier === undefined ? -1 : t.identifier) === id) return t;
+  }
+  return null;
+}
 wx.onTouchStart(function(e){
-  const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]);
+  const t = (e.changedTouches && e.changedTouches[0]) || (e.touches && e.touches[0]);
   if(!t) return;
+  activeTouchId = (t.identifier === undefined ? -1 : t.identifier);
   UI.touchStart(t.clientX * DPR, t.clientY * DPR);
 });
 wx.onTouchMove(function(e){   // 【小游戏改造】商店货架要用手指拖着滚
-  const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]);
+  const t = touchOf(e.changedTouches, activeTouchId) || touchOf(e.touches, activeTouchId);
   if(!t) return;
   UI.touchMove(t.clientX * DPR, t.clientY * DPR);
 });
-wx.onTouchEnd(function(){ UI.touchEnd(); });
-wx.onTouchCancel(function(){ UI.touchEnd(); });
+function touchUp(e){
+  // 只有"正在操作的那根手指"抬起才算松手：旁边手指抬起不打断跳跃/拖动
+  if(e && e.changedTouches && e.changedTouches.length && !touchOf(e.changedTouches, activeTouchId)) return;
+  activeTouchId = null;
+  UI.touchEnd();
+}
+wx.onTouchEnd(touchUp);
+wx.onTouchCancel(touchUp);
 
 try{ wx.setKeepScreenOn({ keepOn: true }); }catch(e){}   // 玩的时候屏幕别自动熄灭
 
@@ -147,18 +169,27 @@ function waveSample(type, phase){
   if(type === 'sawtooth') return 2 * p - 1;
   return p < 0.5 ? 4 * p - 1 : 3 - 4 * p;   // triangle
 }
+const toneCache = new Map();   // 【小游戏改造】音色缓存：同一种音符只合成一次，之后直接播（手机省电不掉帧）
 function playTone(f0, f1, dur, type, vol, when){
   if(!actx || !masterGain) return;
   try{
-    const sr = 44100, n = Math.max(1, Math.floor(sr * (dur + 0.03)));
-    const buf = actx.createBuffer(1, n, sr);
-    const data = buf.getChannelData(0);
-    let phase = 0;
-    for(let i = 0; i < n; i++){
-      const tt = i / sr, k = Math.min(1, tt / dur);
-      const f = f0 * Math.pow(Math.max(1, f1) / Math.max(1, f0), k);   // 指数滑音
-      phase += f / sr;
-      data[i] = waveSample(type, phase) * vol * Math.pow(0.0001, k);   // 指数衰减包络
+    const key = type + '|' + f0 + '|' + f1 + '|' + dur + '|' + vol;
+    let buf = toneCache.get(key);
+    if(!buf){
+      const sr = 44100, total = Math.max(1, Math.floor(sr * (dur + 0.03))), nd = Math.max(1, Math.floor(sr * dur));
+      buf = actx.createBuffer(1, total, sr);
+      const data = buf.getChannelData(0);
+      // 衰减和滑音都写成"每个采样乘一个固定系数"的递推：
+      // 衰减终点是绝对值 0.0001（网页版 exponentialRamp 的语义），不是 vol×0.0001——之前算错了会让尾音断得太快
+      let phase = 0, env = vol, f = Math.max(1, f0);
+      const envMul = Math.pow(0.0001 / vol, 1 / nd);
+      const fMul = Math.pow(Math.max(1, f1) / Math.max(1, f0), 1 / nd);
+      for(let i = 0; i < total; i++){
+        phase += f / sr;
+        data[i] = i < nd ? waveSample(type, phase) * env : 0;
+        if(i < nd){ env *= envMul; f *= fMul; }
+      }
+      if(toneCache.size < 200) toneCache.set(key, buf);   // 防御上限：实际只有几十种音符
     }
     const s = actx.createBufferSource();
     s.buffer = buf;
@@ -515,16 +546,21 @@ function updateShareUrl(){
   // 【小游戏改造】网页版往地址栏写"战书链接"；小游戏改成微信分享卡片，
   // 分享参数在 UI 层的 wx.onShareAppMessage 里现取现拼，这里不用做事了
 }
-// 【小游戏改造】挑战书从"链接参数"改成"微信分享卡片带的参数"
-try{
-  const q = (wx.getLaunchOptionsSync().query) || {};
-  const cc = parseInt(q.c), nn = decodeURIComponent(q.n || '').slice(0, 12);
-  if(cc > 0 && nn && parseInt(q.s) === challengeSum(cc, nn)){
-    challenge = { score: cc, name: nn };
-    showBanner('⚔️ ' + nn + ' 向你发起挑战：' + cc + ' 分！', 4, '#ff8aa0');
-  }
-  if(q.d) showBanner('☀️ 朋友喊你来比今日挑战！', 4, '#ffd34d');
-}catch(e){}
+// 【小游戏改造】挑战书从"链接参数"改成"微信分享卡片带的参数"。
+// 注意：小游戏切到后台不会"重新打开页面"——冷启动看 getLaunchOptionsSync，
+// 热启动（游戏还活在后台、玩家点了好友的挑战卡片进来）要在 wx.onShow 里再解析一次
+function parseChallengeQuery(q){
+  try{
+    q = q || {};
+    const cc = parseInt(q.c), nn = decodeURIComponent(q.n || '').slice(0, 12);
+    if(cc > 0 && nn && parseInt(q.s) === challengeSum(cc, nn)){
+      challenge = { score: cc, name: nn };
+      showBanner('⚔️ ' + nn + ' 向你发起挑战：' + cc + ' 分！', 4, '#ff8aa0');
+    }
+    if(q.d) showBanner('☀️ 朋友喊你来比今日挑战！', 4, '#ffd34d');
+  }catch(e){}
+}
+try{ parseChallengeQuery(wx.getLaunchOptionsSync().query); }catch(e){}
 
 /* ========== 6. 玩家与角色 ========== */
 // 角色表：每个角色有自己的长相、能力和身价，能力越强越贵！
@@ -2903,14 +2939,14 @@ function uiDrawHome(){
   uiBtn({ id: 'homeStart', x: cx - sw2 / 2, y: sy2, w: sw2, h: sh2,
     label: '▶️ 开始游戏' + (pendingSprint ? ' · 🚀' + pendingSprint + '米' : '') + (pendingShield ? ' · 🛡' : ''),
     size: fs(0.05), bg: '#ffd34d', fg: '#4a3500', stroke: '#3a2a00',
-    cb(){ ensureAudio(); uiHome = false; uiScreen = 'none'; startLoading(() => startGame()); } });
+    cb(){ if(!homeOpen() || loadingStart) return; ensureAudio(); uiHome = false; uiScreen = 'none'; startLoading(() => startGame()); } });
   // —— 三个小入口：今日挑战（第一局先藏着：渐进披露）/ 商店 / 签到 ——
   const rowY = sy2 + sh2 + ch * 0.02, rowH = ch * 0.095;
   const defs = [];
   if(save.runs > 0) defs.push(['homeDaily', '☀️ 今日挑战',
-    () => { ensureAudio(); uiHome = false; uiScreen = 'none'; startLoading(() => startDaily()); }]);
-  defs.push(['homeShop', '🛒 商店', () => { ensureAudio(); toggleShop(true); }]);
-  defs.push(['homeSign', '📅 签到', () => { ensureAudio(); uiScreen = 'sign'; }]);
+    () => { if(!homeOpen() || loadingStart) return; ensureAudio(); uiHome = false; uiScreen = 'none'; startLoading(() => startDaily()); }]);
+  defs.push(['homeShop', '🛒 商店', () => { if(!homeOpen() || loadingStart) return; ensureAudio(); toggleShop(true); }]);
+  defs.push(['homeSign', '📅 签到', () => { if(!homeOpen() || loadingStart) return; ensureAudio(); uiScreen = 'sign'; }]);
   const bw = cw * 0.105, bGap = cw * 0.012;
   const totW = defs.length * bw + (defs.length - 1) * bGap;
   defs.forEach((d, i) => {
@@ -3268,11 +3304,11 @@ function uiDrawDead(){
     const nearTxt = (!game.newBest && game.startBest > 0 && game.score >= game.startBest * 0.85) ? '，冲纪录！' : '';
     const revTxt = revFree ? '🎁 新手专享：免费复活！' : '💰 花 ' + revCost + ' 金币复活' + nearTxt;
     uiBtn({ id: 'deadRevive', x: inX, y: y, w: inW, h: btnH, label: revTxt, size: fs(0.036),
-            bg: '#ffd34d', fg: '#4a3500', cb(){ revive(); } });
+            bg: '#ffd34d', fg: '#4a3500', cb(){ if(game.state !== 'dead') return; revive(); } });
     y += btnH + btnGap;
   }
   uiBtn({ id: 'deadAgain', x: inX, y: y, w: inW, h: btnH, label: '🔁 再来一局', size: fs(0.036),
-          bg: 'rgba(255,255,255,0.16)', fg: '#fff', cb(){ ensureAudio(); startGame(); } });
+          bg: 'rgba(255,255,255,0.16)', fg: '#fff', cb(){ if(game.state !== 'dead') return; ensureAudio(); startGame(); } });
   y += btnH + btnGap;
   if(dailyMode){   // 日赛专属：把战报发到群里，群友就是排行榜
     uiBtn({ id: 'deadCopy', x: inX, y: y, w: inW, h: btnH, label: uiCopyLabel, size: fs(0.036),
@@ -3280,7 +3316,7 @@ function uiDrawDead(){
     y += btnH + btnGap;
   }
   uiBtn({ id: 'deadHome', x: inX, y: y, w: inW, h: homeH, label: '🏠 回主页', size: fs(0.03),
-          bg: 'none', fg: '#97a1b8', bold: false, cb: goHome });
+          bg: 'none', fg: '#97a1b8', bold: false, cb(){ if(game.state !== 'dead') return; goHome(); } });
   ctx.restore();
 }
 
@@ -3365,7 +3401,7 @@ function uiDrawGameBtns(){
 }
 
 /* —— UI 入口：触摸分发 + 各界面的画法 —— */
-const uiTouch = { on: false, x: 0, y: 0 };   // 当前这根手指的位置（商店拖动滚动用）
+const uiTouch = { on: false, x: 0, y: 0, moved: 0, pendId: null };   // 当前手指位置 + 累计位移 + 待触发按钮
 const UI = {
   pauseIcon: 'pause',
   loadTip: '',
@@ -3373,11 +3409,14 @@ const UI = {
   touchStart(x, y){   // x/y 是设备像素坐标
     ensureAudio();
     uiTouch.on = true; uiTouch.x = x; uiTouch.y = y;
+    uiTouch.moved = 0; uiTouch.pendId = null;
     // 命中测试：后画的盖在上层，所以从数组末尾往前找
     for(let i = UI.zones.length - 1; i >= 0; i--){
       const z = UI.zones[i];
       if(x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h){
-        if(z.cb) z.cb();
+        // 【小游戏改造】按钮"抬起时才触发"（和网页版 click 一致）：
+        // 想滚商店货架的手指就算落在按钮上，拖走也不会误买
+        uiTouch.pendId = z.cb ? z.id : null;
         return;   // 点在界面上（哪怕是卡片空白处）就不再当游戏操作
       }
     }
@@ -3385,6 +3424,8 @@ const UI = {
     if(game.state === 'playing') startBGM();
   },
   touchMove(x, y){   // 手指拖动：目前只有商店货架需要滚
+    uiTouch.moved += Math.abs(x - uiTouch.x) + Math.abs(y - uiTouch.y);
+    if(uiTouch.moved > canvas.height * 0.03) uiTouch.pendId = null;   // 拖远了＝滚动手势，取消待点按钮
     if(uiTouch.on && shopOpen()){
       shopScroll = clamp(shopScroll + (y - uiTouch.y), Math.min(0, shopViewH - shopContentH), 0);
     }
@@ -3392,7 +3433,21 @@ const UI = {
   },
   touchEnd(){
     uiTouch.on = false;
-    releaseJump('pointer');
+    const pid = uiTouch.pendId; uiTouch.pendId = null;
+    if(pid){
+      // 抬起时手指还停在同一个按钮上才算点击（按钮每帧重画，按 id 找它现在的位置）
+      for(let i = UI.zones.length - 1; i >= 0; i--){
+        const z = UI.zones[i];
+        if(z.id === pid && z.cb &&
+           uiTouch.x >= z.x && uiTouch.x <= z.x + z.w && uiTouch.y >= z.y && uiTouch.y <= z.y + z.h){
+          z.cb();
+          UI.zones.length = 0;   // 一次手势只触发一个按钮，下一帧按新界面重建（防同帧连点两个）
+          break;
+        }
+      }
+    } else {
+      releaseJump('pointer');
+    }
     ensureAudio();
     if(game.state === 'playing') startBGM();
   },
@@ -3448,7 +3503,7 @@ function frame(t){
   }
   if(!paused) update(dt);
   clearDevice();   // 【小游戏改造】先刷全屏底色
-  render();
+  if(!homeOpen()) render();   // 【小游戏改造】主页时游戏世界整个被场景盖住，跳过白画的一帧
   UI.pauseIcon = paused ? 'play' : 'pause';   // 【小游戏改造】暂停图标的状态交给画布 UI
   UI.zones.length = 0;   // 【小游戏改造】每帧重建"可点区域"：界面画到哪，按钮登记到哪
   if(homeOpen()){ drawHomeScene(); blitHome(); UI.drawHome(); }   // 【小游戏改造】像素场景铺满屏，再画大厅按钮
