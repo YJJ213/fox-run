@@ -1,0 +1,13 @@
+{
+  "appid": "wxbfff22744571f326",
+  "compileType": "game",
+  "projectname": "狐狸快跑呀",
+  "libVersion": "latest",
+  "description": "像素风跑酷小游戏《狐狸快跑呀》",
+  "setting": {
+    "es6": true,
+    "minified": true,
+    "urlCheck": true
+  },
+  "condition": {}
+}
