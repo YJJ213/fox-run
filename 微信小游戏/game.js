@@ -57,15 +57,26 @@ function resize(){
   VIEW.oy = (canvas.height - H * VIEW.s) / 2;
   ctx.setTransform(VIEW.s, 0, 0, VIEW.s, VIEW.ox, VIEW.oy);
   // 【小游戏改造】iPhone 刘海屏：系统会告诉我们哪块是"安全区域"，记分牌往里挪
+  // 【真机修复】iPhone 刚转完横屏的一瞬间，safeArea 可能还是竖屏的旧值（右边界远小于窗口宽度），
+  // 拿它算布局会把按钮挤到屏幕中间——所以先"验真"：对不上当前窗口的一律不信，宁可贴边不能歪
   const sa = sysInfo.safeArea;
-  SAFE.l = sa ? Math.max(0, sa.left) * DPR : 0;
-  SAFE.r = sa ? Math.max(0, sysInfo.windowWidth - sa.right) * DPR : 0;
+  const saOK = sa && sa.right <= sysInfo.windowWidth + 2 && sa.right >= sysInfo.windowWidth * 0.8;
+  SAFE.l = saOK ? Math.max(0, sa.left) * DPR : 0;
+  SAFE.r = saOK ? Math.max(0, sysInfo.windowWidth - sa.right) * DPR : 0;
   try{ if(wx.getMenuButtonBoundingClientRect) CAPSULE = wx.getMenuButtonBoundingClientRect(); }catch(e){}
+  // 胶囊位置同样验真：必须真的待在"当前窗口"的右上角，否则当它不存在（走兜底布局）
+  if(CAPSULE && !(CAPSULE.right <= sysInfo.windowWidth + 2 && CAPSULE.right > sysInfo.windowWidth * 0.6 &&
+                  CAPSULE.bottom < sysInfo.windowHeight * 0.5)){
+    CAPSULE = null;
+  }
   hudInsetL = Math.max(0, (SAFE.l - VIEW.ox) / VIEW.s);
 }
 resize();
 // 屏幕旋转/窗口变化时跟着重新铺画布（真机横竖屏切换、开发者工具点旋转按钮都走这里）
 if(wx.onWindowResize){ try{ wx.onWindowResize(function(){ resize(); }); }catch(e){} }
+// 【真机修复】iPhone 进横屏有个过程：开局后再自动校准两次，等 safeArea/胶囊换算成横屏的真值
+setTimeout(resize, 600);
+setTimeout(resize, 2000);
 // 每帧先把整块屏幕刷成深色，舞台边永远干净
 function clearDevice(){
   ctx.save();
@@ -94,6 +105,7 @@ wx.onHide(function(){
 });
 wx.onShow(function(res){
   appHidden = false;
+  resize();   // 【真机修复】切回前台重新校准布局（安全区/胶囊可能刚刷新）
   // 【小游戏改造】热启动带的新参数只出现在这里（后台时点了好友的挑战卡片）
   if(res && res.query) parseChallengeQuery(res.query);
 });
@@ -304,6 +316,11 @@ const BGM_BONUS = {
             69,72,76,81, 72,76,81,84,  79,83,86,88, 91,0,84,0 ],
   bass:   [ 48,55,48,55, 41,48,41,48, 43,50,43,50, 48,55,48,55, 45,52,45,52, 43,50,36,48 ],
 };
+// 【主页音乐】大厅摇篮曲：柔和的 C 大调摇摆，等玩家点"开始"（首次点击屏幕后才有声音，这是平台规定）
+const BGM_MENU = { step: 0.3,
+  melody: [ 72,0,76,79, 84,0,79,76, 74,0,77,81, 86,0,81,77,
+            76,0,79,84, 88,0,84,79, 77,0,81,84, 79,0,74,0 ],
+  bass:   [ 48,55,52,55, 50,57,53,57, 52,59,55,59, 53,57,50,43 ] };
 // 当前该放第几乐章：按本局跑的里程分段
 function bgmTier(){
   if(game.state !== 'playing') return 0;
@@ -319,7 +336,8 @@ function playNote(midi, t, dur, type, vol){
 }
 // 【音乐多样化】此刻该放哪首：奖励关期间优先放专属欢快小调；平时按里程乐章 + 本局抽中的 A/B
 function bgmPick(){
-  if(game.state === 'playing' && bgTime < bonusUntil) return BGM_BONUS;   // 奖励关结束自然切回
+  if(game.state !== 'playing') return BGM_MENU;   // 【主页音乐】不在跑就放大厅摇篮曲
+  if(bgTime < bonusUntil) return BGM_BONUS;   // 奖励关结束自然切回
   return BGM_TRACKS[bgmTier()][bgmVariant];
 }
 // WebAudio 的常用玩法：用一个普通定时器，把"接下来一秒多"的音符提前排进播放队列
@@ -361,7 +379,11 @@ function loadSave(){
                 mount: false, pet: false, board: false, moth: false,
                 runs: 0, pitsSeen: 0, freeReviveUsed: false, nick: '',
                 lastLogin: '', streak: 0, daily: null, dailyRun: null,
-                bestDist: 0, lastBeat: '', skins: {}, skinOn: {} };
+                bestDist: 0, lastBeat: '', skins: {}, skinOn: {},
+                // 【留存包】③累计统计 ④成就称号 ⑤明日/回归礼包 ⑥周段位（老存档没有这些字段，全靠这里兜底）
+                stat: {}, ach: { un: {}, title: '' },
+                gift: { lastPlay: '', claimed: '', lastPlayTs: 0 },
+                week: { key: '', best: 0 } };
   try{
     const s = JSON.parse(localStorage.getItem('fox_save'));
     if(s && typeof s === 'object'){
@@ -374,6 +396,13 @@ function loadSave(){
       }
       if(!Array.isArray(out.chars) || out.chars.length === 0) out.chars = ['fox'];
       if(typeof out.char !== 'string') out.char = 'fox';
+      // 【留存包】新字段都是"对象套对象"：老存档合并后可能缺内层字段，逐项兜底（老玩家的档不能崩）
+      if(!out.stat || typeof out.stat !== 'object') out.stat = {};
+      if(!out.ach || typeof out.ach !== 'object') out.ach = { un: {}, title: '' };
+      if(!out.ach.un || typeof out.ach.un !== 'object') out.ach.un = {};
+      if(typeof out.ach.title !== 'string') out.ach.title = '';
+      if(!out.gift || typeof out.gift !== 'object') out.gift = { lastPlay: '', claimed: '', lastPlayTs: 0 };
+      if(!out.week || typeof out.week !== 'object') out.week = { key: '', best: 0 };
       return out;
     }
   }catch(e){}
@@ -601,6 +630,10 @@ function challengeSum(c, n){
 function updateShareUrl(){
   // 【小游戏改造】网页版往地址栏写"战书链接"；小游戏改成微信分享卡片，
   // 分享参数在 UI 层的 wx.onShareAppMessage 里现取现拼，这里不用做事了
+  // 【留存包】好友排行榜的数据源：把最高分悄悄存到微信云端。
+  // 主域按微信的隐私规则拿不到好友数据，但"开放数据域"（open-data/index.js）
+  // 可以读到每个好友存的这条 score，拼成排行榜画给我们看
+  try{ wx.setUserCloudStorage({ KVDataList: [{ key: 'score', value: String(game.best) }] }); }catch(e){}
 }
 // 【小游戏改造】挑战书从"链接参数"改成"微信分享卡片带的参数"。
 // 注意：小游戏切到后台不会"重新打开页面"——冷启动看 getLaunchOptionsSync，
@@ -617,6 +650,141 @@ function parseChallengeQuery(q){
   }catch(e){}
 }
 try{ parseChallengeQuery(wx.getLaunchOptionsSync().query); }catch(e){}
+
+/* —— 【留存包】①连击Fever ②震动反馈 ③累计统计 ④成就称号 ⑤礼包 ⑥周段位 —— */
+// ① 连击：吃金币 / 撞碎障碍 / 吃道具 / 跳过坑 都 +1；攒满 30 进入"狂热时刻"（5 秒得分加成）
+let combo = 0, comboBest = 0, feverUntil = 0;
+function addCombo(){
+  combo++;
+  if(combo > comboBest) comboBest = combo;   // 记住本局连击峰值（局末写进存档）
+  if(combo % 30 === 0){                      // 每攒满 30 连击触发一次狂热
+    feverUntil = bgTime + 5;
+    showBanner('🔥 狂热时刻！得分翻倍 5 秒', 2, '#ff8a5c');
+    addStat('fevers', 1);
+    juiceVibrate('fever');
+  }
+}
+function breakCombo(){ combo = 0; }   // 真正受伤时调：连击断了（护盾挡住的不算）
+
+// ② 震动反馈：手机轻轻"哒"一下，增加打击感（不支持的设备静默跳过）
+function juiceVibrate(kind){
+  try{ wx.vibrateShort({ type: 'light' }); }catch(e){}
+}
+
+// ③ 累计统计：跨局累加进存档 save.stat（成就系统从这里读数）
+function addStat(k, n){
+  if(!save.stat) save.stat = {};
+  save.stat[k] = (save.stat[k] || 0) + (n || 1);
+}
+
+// ④ 成就 + 称号：纯数据驱动（UI 层只管展示）。每类三档，最高档附带"称号"
+const ACHIEVEMENTS = [
+  { id: 'coins1',   name: '小有积蓄',   emoji: '💰', desc: '累计吃到 100 枚金币',    stat: 'coins',    goal: 100 },
+  { id: 'coins2',   name: '财源滚滚',   emoji: '💰', desc: '累计吃到 1000 枚金币',   stat: 'coins',    goal: 1000 },
+  { id: 'coins3',   name: '点金狐',     emoji: '💰', desc: '累计吃到 10000 枚金币',  stat: 'coins',    goal: 10000, title: '点金狐' },
+  { id: 'jumps1',   name: '初学起跳',   emoji: '🦘', desc: '累计跳跃 100 次',        stat: 'jumps',    goal: 100 },
+  { id: 'jumps2',   name: '跳个不停',   emoji: '🦘', desc: '累计跳跃 1000 次',       stat: 'jumps',    goal: 1000 },
+  { id: 'jumps3',   name: '弹簧腿',     emoji: '🦘', desc: '累计跳跃 10000 次',      stat: 'jumps',    goal: 10000, title: '弹簧腿' },
+  { id: 'smash1',   name: '小试拳脚',   emoji: '💥', desc: '累计撞碎 10 个障碍',     stat: 'smash',    goal: 10 },
+  { id: 'smash2',   name: '拆迁队长',   emoji: '💥', desc: '累计撞碎 100 个障碍',    stat: 'smash',    goal: 100 },
+  { id: 'smash3',   name: '破坏王',     emoji: '💥', desc: '累计撞碎 500 个障碍',    stat: 'smash',    goal: 500,   title: '破坏王' },
+  { id: 'pits1',    name: '坑口求生',   emoji: '🕳', desc: '累计跳过 10 个坑',       stat: 'pits',     goal: 10 },
+  { id: 'pits2',    name: '如履平地',   emoji: '🕳', desc: '累计跳过 100 个坑',      stat: 'pits',     goal: 100 },
+  { id: 'pits3',    name: '跳坑大师',   emoji: '🕳', desc: '累计跳过 1000 个坑',     stat: 'pits',     goal: 1000,  title: '跳坑大师' },
+  { id: 'bunnies1', name: '初遇钻石兔', emoji: '🐰', desc: '抓住 1 只钻石兔',        stat: 'bunnies',  goal: 1 },
+  { id: 'bunnies2', name: '兔子克星',   emoji: '🐰', desc: '累计抓住 10 只钻石兔',   stat: 'bunnies',  goal: 10 },
+  { id: 'bunnies3', name: '追兔猎人',   emoji: '🐰', desc: '累计抓住 50 只钻石兔',   stat: 'bunnies',  goal: 50,    title: '追兔猎人' },
+  { id: 'fevers1',  name: '第一把火',   emoji: '🔥', desc: '触发 1 次狂热时刻',      stat: 'fevers',   goal: 1 },
+  { id: 'fevers2',  name: '越烧越旺',   emoji: '🔥', desc: '累计触发 10 次狂热时刻', stat: 'fevers',   goal: 10 },
+  { id: 'fevers3',  name: '狂热信徒',   emoji: '🔥', desc: '累计触发 50 次狂热时刻', stat: 'fevers',   goal: 50,    title: '狂热信徒' },
+  { id: 'meters1',  name: '热身完毕',   emoji: '🏃', desc: '累计跑 5000 米',         stat: 'meters',   goal: 5000 },
+  { id: 'meters2',  name: '长跑健将',   emoji: '🏃', desc: '累计跑 50000 米',        stat: 'meters',   goal: 50000 },
+  { id: 'meters3',  name: '万里行者',   emoji: '🏃', desc: '累计跑 500000 米',       stat: 'meters',   goal: 500000, title: '万里行者' },
+  { id: 'runs1',    name: '常来常往',   emoji: '🎮', desc: '累计开跑 10 局',         stat: 'runs',     goal: 10 },
+  { id: 'runs2',    name: '百战老狐',   emoji: '🎮', desc: '累计开跑 100 局',        stat: 'runs',     goal: 100 },
+  { id: 'runs3',    name: '肝帝',       emoji: '🎮', desc: '累计开跑 500 局',        stat: 'runs',     goal: 500,   title: '肝帝' },
+  { id: 'combo1',   name: '渐入佳境',   emoji: '⚡', desc: '单局连击达到 30',        stat: 'maxCombo', goal: 30 },
+  { id: 'combo2',   name: '行云流水',   emoji: '⚡', desc: '单局连击达到 60',        stat: 'maxCombo', goal: 60 },
+  { id: 'combo3',   name: '连击之神',   emoji: '⚡', desc: '单局连击达到 100',       stat: 'maxCombo', goal: 100,   title: '连击之神' },
+];
+function checkAchievements(){
+  if(!save.ach || typeof save.ach !== 'object') save.ach = { un: {}, title: '' };
+  if(!save.ach.un) save.ach.un = {};
+  const st = save.stat || {};
+  for(const a of ACHIEVEMENTS){
+    if(save.ach.un[a.id]) continue;            // 已解锁的不再查
+    if((st[a.stat] || 0) >= a.goal){
+      save.ach.un[a.id] = 1;
+      showBanner('🏅 成就达成：' + a.emoji + a.name, 2.4, '#ffd34d');
+      if(a.title && !save.ach.title) save.ach.title = a.title;   // 带称号的成就：没选过称号就自动戴上
+    }
+  }
+}
+// 玩家称号：接在昵称 / 战报前面用，如【连击之神】；没称号返回空串
+function playerTitle(){ return save.ach && save.ach.title ? '【' + save.ach.title + '】' : ''; }
+
+// ⑤ 明日礼包 / 回归礼包：'tomorrow'=昨天玩过、今天可领 200💰；'back'=3 天没来、可领 500💰+2💎
+function giftState(){
+  const today = todayStr();
+  const g = save.gift || {};
+  if(g.claimed === today) return 'done';               // 今天已经领过
+  if(!(save.runs > 0) || !g.lastPlay) return 'none';   // 还没玩过：没有礼包
+  const yest = new Date(); yest.setDate(yest.getDate() - 1);
+  if(g.lastPlay === yest.toDateString()) return 'tomorrow';
+  const days = g.lastPlayTs ? (Date.now() - g.lastPlayTs) / 86400000 : 0;   // 用时间戳算"几天没玩了"
+  if(days >= 3 && g.lastPlay !== today) return 'back';
+  return 'none';
+}
+function claimGift(){
+  const st = giftState();
+  if(st !== 'tomorrow' && st !== 'back') return null;   // 没有可领的：返回 null，UI 层据此隐藏按钮
+  const out = st === 'back' ? { coins: 500, gems: 2 } : { coins: 200, gems: 0 };
+  save.coins += out.coins; save.gems += out.gems;
+  save.gift.claimed = todayStr();
+  saveSave();
+  showBanner(st === 'back' ? '🎁 回归礼包：+' + out.coins + '💰 +' + out.gems + '💎 欢迎回来！'
+                           : '🎁 明日礼包：+' + out.coins + '💰 明天再来还有！', 2.6, '#ffd34d');
+  return out;   // 告诉 UI 层发了什么 {coins, gems}
+}
+
+// ⑥ 周段位：本周（周一起算）最高分决定段位，跨周自动清零重新打
+function weekKey(){
+  const d = new Date();
+  const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (d.getDay() + 6) % 7);   // 本周的周一
+  const wn = Math.floor((mon - new Date(mon.getFullYear(), 0, 1)) / 86400000 / 7) + 1;       // 周一是当年第几周
+  return mon.getFullYear() + '-w' + wn;   // 形如 '2026-w24'
+}
+const RANKS = [
+  { name: '青铜狐', at: 0,     e: '🥉' },
+  { name: '白银狐', at: 1000,  e: '🥈' },
+  { name: '黄金狐', at: 3000,  e: '🥇' },
+  { name: '铂金狐', at: 6000,  e: '💠' },
+  { name: '钻石狐', at: 10000, e: '💎' },
+  { name: '王者狐', at: 15000, e: '👑' },
+  { name: '传说狐', at: 22000, e: '🌟' },
+];
+function rankOf(b){
+  let cur = RANKS[0], next = null;
+  for(const r of RANKS){
+    if(b >= r.at) cur = r;
+    else { next = r; break; }
+  }
+  return { rank: cur, next: next, toNext: next ? next.at - b : 0 };   // toNext=离下一段还差多少分
+}
+
+// 一局结束（摔死 / 日赛完赛）统一走这里：把本局数据归档进留存系统
+function endRunStats(died){
+  if(died) addStat('deaths', 1);
+  addStat('meters', Math.floor(game.runDist / 12));   // 累计里程在局末一次记入
+  if(comboBest > (save.stat.maxCombo || 0)) save.stat.maxCombo = comboBest;   // 本局连击峰值（取最大）
+  combo = 0;                                          // 局末连击清零（掉坑死亡也算断连击）
+  if(!save.gift || typeof save.gift !== 'object') save.gift = { lastPlay: '', claimed: '', lastPlayTs: 0 };
+  save.gift.lastPlay = todayStr(); save.gift.lastPlayTs = Date.now();   // 礼包系统记"最后一次玩"
+  const wk = weekKey();
+  if(!save.week || save.week.key !== wk) save.week = { key: wk, best: 0 };   // 跨周：段位分重置
+  if(game.score > save.week.best) save.week.best = game.score;
+  checkAchievements();   // 成就一局查一次就够了
+}
 
 /* ========== 6. 玩家与角色 ========== */
 // 角色表：每个角色有自己的长相、能力和身价，能力越强越贵！
@@ -702,6 +870,7 @@ function pressJump(source){
 function airJump(){
   const p = player;
   p.jumpsUsed++;
+  addStat('jumps', 1);   // 【留存包】③ 空中连跳也算跳跃
   p.vy = JUMP_VY * 0.88;   // 空中跳比地面跳略矮一点
   p.gliding = false;
   sfx.jump(1 + 0.18 * (p.jumpsUsed - 1));   // 第二、三段跳音调依次升高
@@ -717,6 +886,8 @@ function releaseJump(source){
 function startGame(){
   if(dailyMode) seededRng = mulberry32(dateNum());   // 日赛每次重试都从头放同一串随机数
   save.runs = (save.runs || 0) + 1;
+  addStat('runs', 1);                          // 【留存包】③ 累计局数
+  combo = 0; comboBest = 0; feverUntil = 0;    // 【留存包】① 新一局连击从零攒
   game.state = 'playing';
   game.speed = SPEED_START;
   game.runDist = 0; game.score = 0; game.coinCount = 0;
@@ -773,6 +944,7 @@ function die(cause){
       save.bestDist = Math.floor(game.runDist);   // 记下纪录局跑到的距离 → 赛道上的"纪录旗"
     }
   }
+  endRunStats(true);   // 【留存包】统计 / 成就 / 礼包 / 周段位 都在局末统一结算
   saveBest();
   updateDeadCard();   // 把结算信息填进 DOM 卡片
 }
@@ -794,6 +966,7 @@ function finishDaily(){
   stopBGM();
   sfx.power();
   taskProg('meters', 0, Math.floor(game.runDist / 12));
+  endRunStats(false);   // 【留存包】完赛不算"死亡"，但里程/连击/礼包照常结算
   recordDailyRun();
   updateDeadCard();
   showBanner('🏁 完赛！', 2, '#ffd34d');
@@ -810,6 +983,8 @@ function stumble(){
   }
   invulnUntil = bgTime + 1.0;
   game.penalty += 20;
+  breakCombo();           // 【留存包】① 真正受伤：连击断了（护盾挡住的在上面已 return，不断）
+  juiceVibrate('hurt');   // 【留存包】② 痛感震动
   game.shake = 8;
   setFace('hurt', 1.0);   // 痛苦表情
   sfx.hit();
@@ -1244,6 +1419,12 @@ function update(dt){
   }
   for(let i = pits.length - 1; i >= 0; i--){
     pits[i].x -= move;
+    // 【留存包】① 成功跳过一个坑：坑的右沿滑到玩家身后、且人没掉在坑里 → 连击 +1（passed 标记保证每坑只记一次）
+    if(!pits[i].passed && !player.inPit && pits[i].x + pits[i].w < player.x){
+      pits[i].passed = true;
+      addCombo();
+      addStat('pits', 1);
+    }
     if(pits[i].x + pits[i].w < -60) pits.splice(i, 1);
   }
   for(let i = coins.length - 1; i >= 0; i--){
@@ -1281,6 +1462,9 @@ function update(dt){
       if(smashed){
         obstacles.splice(i, 1);
         game.bonus += goldStorm ? 5 : 2;
+        if(bgTime < feverUntil) game.bonus += 2;   // 【留存包】① 狂热时刻：撞碎额外 +2
+        addCombo(); addStat('smash', 1);           // 【留存包】①③ 撞碎续连击 + 累计撞碎数
+        juiceVibrate('smash');                     // 【留存包】② 撞碎的"哒"一下
         game.shake = Math.max(game.shake, 5);
         setFace('joy', 0.5);   // 撞碎东西很爽！
         taskProg('smash', 1);
@@ -1317,6 +1501,7 @@ function update(dt){
     if((it.x - inx) * (it.x - inx) + (it.y - iny) * (it.y - iny) < pickR * pickR){
       items.splice(i, 1);
       activatePower(it.type);
+      addCombo(); addStat('items', 1);   // 【留存包】①③ 吃道具也续连击 + 累计道具数
       taskProg('items', 1);
       burst(it.x, it.y, 10, [POWER_INFO[it.type].color, '#ffffff']);
     }
@@ -1326,8 +1511,8 @@ function update(dt){
   if(!dailyMode && !inBonus && game.runDist / 12 >= nextMeteorAt){
     nextMeteorAt = game.runDist / 12 + 800 + Math.random() * 400;
     showBanner('💫 流星雨来袭！盯住地上的阴影', 2.2, '#ff8a5c');
-    for(let i = 0; i < 3; i++){
-      obstacles.push({ type: 'meteor', x: W + 200 + i * 240, w: 30, h: 30, dropAt: bgTime + 1.2 + i * 0.35 });
+    for(let i = 0; i < 5; i++){   // 【真机反馈】3 颗太冷清，5 颗才像"雨"
+      obstacles.push({ type: 'meteor', x: W + 160 + i * 210, w: 30, h: 30, dropAt: bgTime + 1.0 + i * 0.3 });
     }
     sfx.hit();
   }
@@ -1361,6 +1546,8 @@ function update(dt){
          pb.x < bb.x + bb.w && pb.x + pb.w > bb.x &&
          pb.y < bb.y + bb.h && pb.y + pb.h > bb.y){
         save.gems += 1; saveSave();
+        addStat('bunnies', 1);      // 【留存包】③ 累计抓兔数
+        juiceVibrate('bunny');      // 【留存包】② 抓到了！震一下
         taskProg('bunny', 1);
         burst(bunny.x, GROUND_Y - 20, 16, ['#7df9ff', '#ffffff']);
         showBanner('💎 抓到钻石兔！钻石 +1', 1.8, '#7df9ff');
@@ -1426,6 +1613,8 @@ function update(dt){
       if(weekendBoost()) v *= 2;                   // 周末活动：金币再双倍！
       game.coinCount += v;
       save.coins += v;
+      if(bgTime < feverUntil) game.bonus += 2;   // 【留存包】① 狂热时刻：吃金币额外 +2 分
+      addCombo(); addStat('coins', v);           // 【留存包】①③ 吃金币续连击 + 累计金币数
       taskProg('coins', v);
       if(game.coinCount % 10 < v) saveSave();   // 大约每 10 枚存一次档（双倍时一次跳 2，用 < v 兜住）
       sfx.coin();
@@ -1497,6 +1686,7 @@ function updatePlayer(dt){
     p.grounded = false;
     p.jumpsUsed = 1;      // 地面跳算第 1 段，连跳角色还能在空中续
     p.lastPress = -1e9;   // 设回"很久以前"，表示这次按键已经用掉了
+    addStat('jumps', 1);   // 【留存包】③ 累计跳跃数
     sfx.jump();
     puff(p.x + 6, GROUND_Y - 2); puff(p.x + p.w - 6, GROUND_Y - 2);
   }
@@ -1713,6 +1903,8 @@ function drawObstacles(){
       const cx = o.x + o.w / 2;
       ctx.fillStyle = '#3f8c4b';
       rr(cx - 7, top, 14, o.h, 7); ctx.fill();                       // 主干
+      ctx.strokeStyle = 'rgba(10,34,16,0.65)'; ctx.lineWidth = 2.5;   // 【真机反馈】描边提对比
+      rr(cx - 7, top, 14, o.h, 7); ctx.stroke();
       rr(cx - 19, top + o.h * 0.28, 8, o.h * 0.32, 4); ctx.fill();   // 左臂
       rr(cx - 15, top + o.h * 0.50, 10, 7, 3); ctx.fill();
       rr(cx + 11, top + o.h * 0.18, 8, o.h * 0.30, 4); ctx.fill();   // 右臂
@@ -1724,7 +1916,8 @@ function drawObstacles(){
       rock(o.x + o.w * 0.45, o.w * 0.55, o.h * 0.72);
     } else if(o.type === 'spikes'){
       // 一排小尖刺
-      ctx.fillStyle = '#9aa7b8';
+      ctx.fillStyle = '#e3ecf8';   // 【真机反馈】尖刺调亮 + 描边，灰刺在灰山前看不清
+      ctx.strokeStyle = 'rgba(20,26,40,0.6)'; ctx.lineWidth = 2;
       const n = Math.max(3, Math.round(o.w / 14));
       for(let i = 0; i < n; i++){
         const sx = o.x + i * (o.w / n);
@@ -1732,7 +1925,7 @@ function drawObstacles(){
         ctx.moveTo(sx, GROUND_Y);
         ctx.lineTo(sx + o.w / n / 2, GROUND_Y - o.h);
         ctx.lineTo(sx + o.w / n, GROUND_Y);
-        ctx.closePath(); ctx.fill();
+        ctx.closePath(); ctx.fill(); ctx.stroke();
       }
     } else if(o.type === 'birdLow' || o.type === 'birdHigh'){
       drawBird(o);
@@ -1754,17 +1947,28 @@ function drawObstacles(){
       ctx.stroke();
     } else if(o.type === 'meteor'){
       const my = meteorY(o);
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';   // 落点阴影（先看到影子才公平）
-      ctx.beginPath(); ctx.ellipse(o.x + 15, GROUND_Y + 4, my === null ? 10 + (bgTime % 0.4) * 20 : 16, 5, 0, 0, TAU); ctx.fill();
-      if(my !== null){
-        if(my < GROUND_Y){   // 坠落拖尾
-          ctx.strokeStyle = 'rgba(255,155,75,0.6)'; ctx.lineWidth = 4;
-          ctx.beginPath(); ctx.moveTo(o.x + 15, my - 44); ctx.lineTo(o.x + 15, my - 16); ctx.stroke();
+      if(my === null){
+        // 【真机反馈】预警改成亮橙色脉动靶圈：旧版黑影子在雪夜的黑地面上等于隐身
+        const pulse = 0.55 + 0.45 * Math.abs(Math.sin(bgTime * 8));
+        ctx.strokeStyle = 'rgba(255,176,77,' + pulse + ')'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.ellipse(o.x + 15, GROUND_Y + 2, 10 + (bgTime % 0.4) * 24, 6, 0, 0, TAU); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,120,50,' + pulse + ')';
+        ctx.beginPath(); ctx.ellipse(o.x + 15, GROUND_Y + 2, 5, 3, 0, 0, TAU); ctx.fill();
+      } else {
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';   // 落点阴影
+        ctx.beginPath(); ctx.ellipse(o.x + 15, GROUND_Y + 4, 16, 5, 0, 0, TAU); ctx.fill();
+        if(my < GROUND_Y){   // 坠落拖尾：又粗又亮
+          ctx.strokeStyle = 'rgba(255,200,90,0.85)'; ctx.lineWidth = 6;
+          ctx.beginPath(); ctx.moveTo(o.x + 15, my - 70); ctx.lineTo(o.x + 15, my - 14); ctx.stroke();
+          ctx.strokeStyle = 'rgba(255,140,60,0.5)'; ctx.lineWidth = 12;
+          ctx.beginPath(); ctx.moveTo(o.x + 15, my - 52); ctx.lineTo(o.x + 15, my - 18); ctx.stroke();
         }
-        ctx.fillStyle = '#c96a3a';
-        ctx.beginPath(); ctx.arc(o.x + 15, my - 13, 14, 0, TAU); ctx.fill();
-        ctx.fillStyle = '#ff9b4b';
-        ctx.beginPath(); ctx.arc(o.x + 11, my - 16, 6, 0, TAU); ctx.fill();
+        ctx.fillStyle = 'rgba(255,150,60,0.35)';   // 外圈光晕
+        ctx.beginPath(); ctx.arc(o.x + 15, my - 13, 24, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#ff7b2f';
+        ctx.beginPath(); ctx.arc(o.x + 15, my - 13, 16, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#ffd34d';
+        ctx.beginPath(); ctx.arc(o.x + 10, my - 17, 7, 0, TAU); ctx.fill();
       }
     } else {
       rock(o.x, o.w, o.h);
@@ -1903,7 +2107,9 @@ function drawItems(){
 function rock(x, w, h){
   ctx.fillStyle = ['#6e7d63', '#a8835a', '#9fb8cc'][curBiome] || '#6e7d63';   // 岩石颜色跟着生物群系换
   rr(x, GROUND_Y - h, w, h, Math.min(8, w / 3)); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 3;   // 【真机反馈】描边：和地面拉开对比
+  rr(x, GROUND_Y - h, w, h, Math.min(8, w / 3)); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.28)';
   rr(x + 3, GROUND_Y - h + 3, w * 0.4, h * 0.3, 3); ctx.fill();
 }
 
@@ -2422,6 +2628,19 @@ function drawHUD(){
     ctx.fillStyle = '#ffd34d';
     hudText('🚀 开局冲刺 · 还剩 ' + Math.max(0, Math.ceil((boostDist - game.runDist) / 12)) + ' 米', W / 2, 36);
   }
+  // 【留存包】① 连击数：5 连起显示在"最高"下方，连击越高字越大（封顶 1.5 倍）；狂热时金色 + 剩余时间小条
+  if(game.state === 'playing' && combo >= 5){
+    const feverNow = bgTime < feverUntil;
+    ctx.font = 'bold ' + Math.round(15 * Math.min(1.5, 1 + combo / 100)) + 'px ' + FONT;
+    ctx.fillStyle = feverNow ? '#ffd34d' : '#fff';
+    hudText('x' + combo + ' 连击', W / 2, 34);
+    if(feverNow){   // 狂热剩余时间小条：5 秒倒着缩短
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(W / 2 - 45, 58, 90, 5);
+      ctx.fillStyle = '#ff8a5c';
+      ctx.fillRect(W / 2 - 45, 58, 90 * clamp((feverUntil - bgTime) / 5, 0, 1), 5);
+    }
+  }
   // 中央大横幅（破纪录 / 奖励关 / 复活 / 抓到兔子）
   if(bgTime < banner.until){
     ctx.globalAlpha = Math.min(1, (banner.until - bgTime) / 0.4);
@@ -2493,6 +2712,11 @@ function render(){
   const pal = skyPalette();
   curBiome = pal.biome || 0;
   drawBackground(pal);
+  // 【真机反馈】夜色滤镜只罩背景：障碍/金币/角色保持鲜亮，雪夜里也看得一清二楚
+  if(pal.night > 0.02){
+    ctx.fillStyle = 'rgba(10,16,42,' + (0.16 * pal.night) + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
   drawPits();
   drawObstacles();
   if(bunny) drawBunny();
@@ -2500,14 +2724,15 @@ function render(){
   drawItems();
   drawParticles();
   drawPlayer();
-  // 夜里给整个世界蒙一层淡淡的蓝
-  if(pal.night > 0.02){
-    ctx.fillStyle = 'rgba(10,16,42,' + (0.16 * pal.night) + ')';
-    ctx.fillRect(0, 0, W, H);
-  }
+  // （夜色滤镜已挪到背景层，见 drawBackground 之后）
   // 超级奖励时间：铺一层金色滤镜
   if(bgTime < bonusUntil){
     ctx.fillStyle = 'rgba(255,205,70,0.12)';
+    ctx.fillRect(0, 0, W, H);
+  }
+  // 【留存包】① 狂热时刻：铺一层暖橙滤镜（写法同上面奖励关的金色滤镜，叠在它后面）
+  if(bgTime < feverUntil){
+    ctx.fillStyle = 'rgba(255,120,40,0.10)';
     ctx.fillRect(0, 0, W, H);
   }
   ctx.restore();
@@ -2606,7 +2831,7 @@ function drawLoading(){
    业务规则（价格/概率/文案）与网页版一字不差。 */
 
 /* —— 界面状态机 —— */
-let uiScreen = 'home';     // 当前界面：'home'=主页 | 'shop'=商店 | 'sign'=签到 | 'none'=游戏中
+let uiScreen = 'home';     // 当前界面：'home'=主页 | 'shop'=商店 | 'sign'=签到 | 'rank'=好友榜 | 'ach'=成就 | 'none'=游戏中（【留存包】新增 rank/ach 两页）
 let uiHome = true;         // 主页大厅开关（game.state 同时为 ready 才真正显示）
 let uiAvatarAsk = false;   // "把主角换成你"小卡片（首次照片邀请）
 let uiCopyLabel = '📋 复制战绩发群里';   // 结算卡"复制战绩"按钮的文案（复制成功后会变）
@@ -2888,6 +3113,26 @@ function toggleShop(show){
 }
 function closeSign(){ uiScreen = homeOpen() ? 'home' : 'none'; }
 
+/* —— 【留存包】好友榜 / 成就页的开关（都只能从主页进，关了就回主页） —— */
+function openRank(){
+  uiScreen = 'rank';
+  // 喊"开放数据域"去拉好友分数并画到 sharedCanvas（隐私规则：好友数据只有那边能碰）
+  try{
+    const odc = wx.getOpenDataContext();
+    if(odc && odc.canvas){ odc.canvas.width = 720; odc.canvas.height = 520; }   // 给排行榜画布定个固定清晰度
+    if(odc && odc.postMessage) odc.postMessage({ cmd: 'rank' });                // 每次打开都重新拉一次最新数据
+  }catch(e){}
+}
+function closeRank(){ uiScreen = homeOpen() ? 'home' : 'none'; }
+function closeAch(){ uiScreen = homeOpen() ? 'home' : 'none'; }
+function weekBestNow(){   // 【留存包】⑥ 本周最高分（存档里若还是上周的记录就按 0 算：跨周段位从头打）
+  return (save.week && save.week.key === weekKey()) ? (save.week.best || 0) : 0;
+}
+/* —— 【留存包】⑦ 广告位预留：以后在微信后台申请好"激励视频广告位"，把 ID 填进 rewardedId、
+   adReady() 改成真正的"广告加载好了吗"，结算卡上那颗灰按钮就会自己活过来 —— */
+const AD = { rewardedId: '' };
+function adReady(){ return false; }   // 目前没有广告位：永远没准备好，按钮先灰着占位
+
 /* —— 今日挑战 / 回主页 / 复制战绩（业务逻辑照抄网页版） —— */
 function startDaily(){
   dailyMode = true;
@@ -2991,6 +3236,10 @@ function updateDeadCard(){
     deadCard.stats = ['本局金币 +' + game.coinCount + ' · 最高纪录 ' + game.best + ' · 今日任务 ' + doneN + '/3'];
     if(challenge && game.score > challenge.score) deadCard.stats.push('🆚 击败了 ' + challenge.name + '！转发链接回去让他好看');
   }
+  // 【留存包】⑥ 段位进度：本周最佳 + 距下一段位还差多少（die() 里 endRunStats 先跑，week.best 已是最新）
+  const wb = weekBestNow(), rk = rankOf(wb);
+  deadCard.stats.push(rk.rank.e + rk.rank.name + ' · 本周最佳 ' + wb + ' 分' +
+                      (rk.next ? ' · 距' + rk.next.e + rk.next.name + '还差 ' + rk.toNext + ' 分' : ' · 已是最高段位！'));
   deadCard.goal = dailyMode ? null : nextGoal();
 }
 
@@ -3029,11 +3278,28 @@ function uiDrawHome(){
   moneyCap('💰 ' + save.coins, '#ffd34d');
   moneyCap('💎 ' + save.gems, '#8ee6ff');
 
+  // 【留存包】④ 礼包：昨天玩过→"明日礼包"(200💰)；3 天没来→"回归礼包"(500💰+2💎)。
+  // 货币胶囊正下方一颗发光小按钮，点了 claimGift() 当场发钱+横幅，领完（'done'）就不再画
+  const gst = giftState();
+  if(gst === 'tomorrow' || gst === 'back'){
+    const gw = ch * 0.36, gh = ch * 0.062;
+    const gx = SAFE.l + ch * 0.03, gy = capY + capH + ch * 0.024;
+    ctx.fillStyle = '#ffd34d';   // 一圈呼吸的金色光晕：喊你快来领
+    ctx.globalAlpha = 0.25 + 0.2 * (0.5 + 0.5 * Math.sin(t * 3.2));
+    dRR(gx - ch * 0.01, gy - ch * 0.01, gw + ch * 0.02, gh + ch * 0.02, gh * 0.7); ctx.fill();
+    ctx.globalAlpha = 1;
+    uiBtn({ id: 'homeGift', x: gx, y: gy, w: gw, h: gh,
+      label: gst === 'back' ? '🎁 回归礼包' : '🎁 领取明日礼包', size: fs(0.028),
+      bg: '#ffd34d', fg: '#4a3500', cb(){ claimGift(); } });
+  }
+
   // —— 标题正下方：昵称一行 + 战绩一行小字（旧版的大统计面板瘦身成两行字，不再挡场景） ——
   const nickY = ch * 0.44;
   dText('昵称：' + (save.nick || '神秘小狐狸') + '  📝', cx, nickY, fs(0.032), '#dfe6f5', 'center');
   addZone('homeNick', cx - cw * 0.13, nickY - ch * 0.03, cw * 0.26, ch * 0.06, editNick);
-  dText('🏆 最高 ' + game.best + ' 分' + (save.streak ? ' · 🔥 连签 ' + save.streak + ' 天' : ''),
+  const rk0 = rankOf(weekBestNow());   // 【留存包】⑥ 周段位徽章拼在战绩后面（如 🥉青铜狐）
+  dText('🏆 最高 ' + game.best + ' 分' + (save.streak ? ' · 🔥 连签 ' + save.streak + ' 天' : '') +
+        ' · ' + rk0.rank.e + rk0.rank.name,
         cx, nickY + ch * 0.052, fs(0.028), '#97a1b8', 'center');
   // 偶尔出现的活动/挑战信息：再往下小字提一句（fitText 限宽，免得伸到右边开始按钮底下）
   let evY = nickY + ch * 0.103;
@@ -3084,7 +3350,7 @@ function uiDrawHome(){
   // —— 右侧中部偏下：超大开始按钮（轻微脉动 1±0.03，回显已买的出发加成） ——
   const startW = Math.min(cw * 0.30, ch * 0.9);          // 基础宽度（超宽屏不无限拉大）
   const scx2 = cw - SAFE.r - ch * 0.04 - startW / 2;     // 按钮中心：靠右、避开圆角安全区
-  const scy2 = ch * 0.55;
+  const scy2 = ch * 0.49;   // 【留存包】从 0.55 挪高一点：下面要再开一排"好友榜/成就"入口，别压到出发加成
   const pulse = 1 + 0.03 * Math.sin(t * 3);              // 【主页改版】缩放脉动：一直轻轻"喊你来点"
   const sw2 = startW * pulse, sh2 = ch * 0.15 * pulse;
   const boostTag = (pendingSprint ? ' · 🚀' + pendingSprint + '米' : '') + (pendingShield ? ' · 🛡️' : '');
@@ -3111,6 +3377,17 @@ function uiDrawHome(){
       ctx.beginPath(); ctx.arc(bx + bw - ch * 0.008, rowY + ch * 0.008, ch * 0.013, 0, TAU); ctx.fill();
       ctx.strokeStyle = '#1d2433'; ctx.lineWidth = Math.max(1, ch * 0.004); ctx.stroke();
     }
+  });
+  // 【留存包】挑战/商店/签到下面再开一排：好友榜 + 成就（同一套宽度体系，正好压着上一排的左右边）
+  const row2Y = rowY + rowH + bGap, row2H = ch * 0.085;
+  const defs2 = [
+    ['homeRank', '🏆 好友榜', () => { if(!homeOpen() || loadingStart) return; ensureAudio(); openRank(); }],
+    ['homeAch',  '📖 成就',   () => { if(!homeOpen() || loadingStart) return; ensureAudio(); achScroll = 0; uiScreen = 'ach'; }],
+  ];
+  const bw2c = (startW - bGap) / 2;
+  defs2.forEach((d, i) => {
+    uiBtn({ id: d[0], x: scx2 - startW / 2 + i * (bw2c + bGap), y: row2Y, w: bw2c, h: row2H, label: d[1], size: fs(0.032),
+            bg: 'rgba(13,16,36,0.85)', fg: '#dfe6f5', stroke: 'rgba(255,255,255,0.25)', bold: false, cb: d[2] });
   });
 
   // —— 底部左：今日任务三条横排小胶囊（✅/⬜ + 任务名 + 进度；第一局先藏着） ——
@@ -3409,6 +3686,137 @@ function uiDrawSign(){
   ctx.restore();
 }
 
+/* —— 【留存包】① 好友排行榜面板：壳子（遮罩/卡片/标题/关闭）是主域画的，
+   中间的名次列表是"开放数据域"（open-data/index.js）画在 sharedCanvas 上的——整张等比贴进来。
+   每次打开都会 postMessage 让那边重新拉一次好友分数 —— */
+function uiDrawRank(){
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const cw = canvas.width, ch = canvas.height;
+  const fs = k => Math.max(9, Math.round(ch * k));
+  ctx.fillStyle = 'rgba(8,12,24,0.65)';
+  ctx.fillRect(0, 0, cw, ch);
+  addZone('rankBack', 0, 0, cw, ch, closeRank);   // 点暗处关闭（和商店/签到一个习惯）
+  const pad = ch * 0.028;
+  const cardW = Math.min(cw * 0.52, ch * 1.3), cardH = ch * 0.92;
+  const cardX = (cw - cardW) / 2, cardY = (ch - cardH) / 2;
+  uiCard(cardX, cardY, cardW, cardH);
+  addZone('rankCard', cardX, cardY, cardW, cardH, null);   // 挡住卡片底下的"点暗处关闭"
+  dText('🏆 好友排行榜', cardX + cardW / 2, cardY + pad + fs(0.042) * 0.55, fs(0.042), '#fff', 'center', true);
+  const closeH = ch * 0.085;
+  const closeY = cardY + cardH - pad - closeH;
+  const areaX = cardX + pad, areaY = cardY + pad * 1.6 + ch * 0.05;
+  const areaW = cardW - pad * 2, areaH = closeY - pad * 0.5 - areaY;
+  try{   // sharedCanvas 等比缩放贴进内容区（contain 模式：好友头像不变形）
+    const odc = wx.getOpenDataContext();
+    const sc = odc && odc.canvas;
+    if(sc && sc.width > 0 && sc.height > 0){
+      const s = Math.min(areaW / sc.width, areaH / sc.height);
+      ctx.drawImage(sc, areaX + (areaW - sc.width * s) / 2, areaY + (areaH - sc.height * s) / 2,
+                    sc.width * s, sc.height * s);
+    }
+  }catch(e){}
+  uiBtn({ id: 'rankClose', x: areaX, y: closeY, w: areaW, h: closeH, label: '关 闭', size: fs(0.036),
+          bg: 'rgba(255,255,255,0.14)', fg: '#fff', bold: false, cb: closeRank });
+  ctx.restore();
+}
+
+/* —— 【留存包】② 成就页：可滚动列表（滚动手感和商店货架同一套），
+   每条 = 表情+名字+描述+进度条(累计/目标)；达成打✅；带称号(🎖)的条目达成后能点击佩戴/再点摘下 —— */
+let achScroll = 0, achViewH = 1, achContentH = 0;   // 成就列表的滚动状态（同 shopScroll 三件套）
+function uiDrawAch(){
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const cw = canvas.width, ch = canvas.height;
+  const fs = k => Math.max(9, Math.round(ch * k));
+  ctx.fillStyle = 'rgba(8,12,24,0.65)';
+  ctx.fillRect(0, 0, cw, ch);
+  addZone('achBack', 0, 0, cw, ch, closeAch);
+  const cardW = Math.min(cw * 0.64, ch * 1.9), cardH = ch * 0.92;
+  const cardX = (cw - cardW) / 2, cardY = (ch - cardH) / 2;
+  uiCard(cardX, cardY, cardW, cardH);
+  addZone('achCard', cardX, cardY, cardW, cardH, null);
+  const pad = ch * 0.03;
+  const st = save.stat || {};
+  const un = (save.ach && save.ach.un) || {};
+  let y = cardY + pad;
+  const gotN = ACHIEVEMENTS.filter(a => un[a.id]).length;
+  dText('📖 成就', cardX + pad, y + fs(0.05) * 0.6, fs(0.05), '#fff', 'left', true);
+  dText('已达成 ' + gotN + ' / ' + ACHIEVEMENTS.length, cardX + cardW - pad, y + fs(0.05) * 0.6, fs(0.036), '#ffd34d', 'right', true);
+  y += fs(0.05) + pad * 0.45;
+  dText(save.ach && save.ach.title
+        ? '当前称号：【' + save.ach.title + '】 · 点别的🎖可以换，再点一次摘下'
+        : '每类做到最高档可得🎖称号，达成后点那一条即可佩戴',
+        cardX + pad, y + fs(0.026) * 0.7, fs(0.026), '#97a1b8', 'left');
+  y += fs(0.026) * 1.5 + pad * 0.35;
+  // 列表区（底部留给关闭按钮），row 滚出视野就不画——和商店货架一样省力气
+  const closeH = ch * 0.085;
+  const closeY = cardY + cardH - pad - closeH;
+  const listX = cardX + pad, listW = cardW - pad * 2;
+  const listY = y, listH = closeY - pad * 0.5 - y;
+  const clip = { x: listX, y: listY, w: listW, h: listH };
+  const rowH = ch * 0.145;
+  achViewH = listH;
+  achContentH = ACHIEVEMENTS.length * rowH;
+  achScroll = clamp(achScroll, Math.min(0, listH - achContentH), 0);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(listX, listY, listW, listH); ctx.clip();
+  ACHIEVEMENTS.forEach((a, i) => {
+    const ry = listY + i * rowH + achScroll;
+    if(ry + rowH < listY || ry > listY + listH) return;
+    const done = !!un[a.id];
+    const cur = st[a.stat] || 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';   // 行与行之间的细分隔线
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(listX, ry + rowH); ctx.lineTo(listX + listW, ry + rowH); ctx.stroke();
+    // 左：表情图标框（达成的换金色底）
+    const pvH = rowH * 0.6, pvY = ry + (rowH - pvH) / 2;
+    ctx.fillStyle = done ? 'rgba(255,211,77,0.14)' : 'rgba(255,255,255,0.07)';
+    dRR(listX, pvY, pvH, pvH, rowH * 0.12); ctx.fill();
+    dText(a.emoji, listX + pvH / 2, pvY + pvH / 2, fs(0.045), '#fff', 'center');
+    // 右：达成✅ + 称号徽章（没达成的称号先灰着馋你）
+    let rx = listX + listW - ch * 0.012;
+    if(done){ dText('✅', rx, ry + rowH * 0.30, fs(0.036), '#7fd89a', 'right'); rx -= fs(0.036) * 1.6; }
+    if(a.title){
+      const on = save.ach && save.ach.title === a.title;
+      ctx.font = 'bold ' + fs(0.028) + 'px ' + FONT;
+      const bw = ctx.measureText('🎖 ' + a.title).width + ch * 0.05;
+      if(done){
+        uiBtn({ id: 'achTitle-' + a.id, x: rx - bw, y: ry + rowH * 0.14, w: bw, h: rowH * 0.34,
+          label: (on ? '✅ ' : '🎖 ') + a.title, size: fs(0.028),
+          bg: on ? '#ffd34d' : 'rgba(255,255,255,0.12)', fg: on ? '#4a3500' : '#ffd34d', bold: on, clip: clip,
+          cb(){ save.ach.title = (save.ach.title === a.title) ? '' : a.title; saveSave(); } });   // 点一下佩戴，再点摘下
+      } else {
+        dText('🎖 ' + a.title, rx, ry + rowH * 0.30, fs(0.026), '#5b6478', 'right');
+      }
+    }
+    // 中：名字 + 描述 + 进度条
+    const tx2 = listX + pvH + ch * 0.024;
+    const nameW = Math.max(40, listX + listW * 0.6 - tx2);
+    dText(fitText(a.name, nameW, fs(0.034), true), tx2, ry + rowH * 0.26, fs(0.034), done ? '#ffd34d' : '#fff', 'left', true);
+    dText(fitText(a.desc, listW - (tx2 - listX) - ch * 0.02, fs(0.026)), tx2, ry + rowH * 0.53, fs(0.026), '#97a1b8', 'left');
+    const barW = listW * 0.34, barH = ch * 0.014, by = ry + rowH * 0.78;
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    dRR(tx2, by - barH / 2, barW, barH, barH / 2); ctx.fill();
+    const frac = clamp(cur / a.goal, 0, 1);
+    if(frac > 0.02){
+      ctx.fillStyle = done ? '#7fd89a' : '#7fb3ff';
+      dRR(tx2, by - barH / 2, barW * frac, barH, barH / 2); ctx.fill();
+    }
+    dText(Math.min(cur, a.goal) + ' / ' + a.goal, tx2 + barW + ch * 0.014, by, fs(0.024), '#97a1b8', 'left');
+  });
+  ctx.restore();
+  if(achContentH > listH){   // 细细的滚动条：提示"下面还有"
+    const sbH = Math.max(listH * 0.08, listH * listH / achContentH);
+    const sbY = listY + (-achScroll / (achContentH - listH)) * (listH - sbH);
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    dRR(cardX + cardW - pad * 0.45, sbY, pad * 0.18, sbH, pad * 0.09); ctx.fill();
+  }
+  uiBtn({ id: 'achClose', x: listX, y: closeY, w: listW, h: closeH, label: '关 闭', size: fs(0.036),
+          bg: 'rgba(255,255,255,0.14)', fg: '#fff', bold: false, cb: closeAch });
+  ctx.restore();
+}
+
 /* —— 死亡结算卡：内容来自 updateDeadCard，复活按钮的条件每帧现算（照抄网页版主循环） —— */
 function uiDrawDead(){
   ctx.save();
@@ -3427,8 +3835,11 @@ function uiDrawDead(){
   const btnH = ch * 0.085, btnGap = ch * 0.013, homeH = ch * 0.06;
   const statH = deadCard.stats.length * ch * 0.042;
   const goalH = deadCard.goal ? ch * 0.075 : 0;
+  const giftTease = giftState() !== 'done';        // 【留存包】④ 明天还有礼包可领：在分数下面预告一句
+  const giftH = giftTease ? ch * 0.036 : 0;
+  const adH = dailyMode ? 0 : ch * 0.06 + btnGap;  // 【留存包】⑦ 广告复活占位按钮（日赛没有复活，不摆）
   const nBtn = 1 + (showRev ? 1 : 0) + (dailyMode ? 1 : 0);
-  const cardH = pad * 2 + ch * (0.06 + 0.042 + 0.095) + statH + goalH + nBtn * (btnH + btnGap) + homeH;
+  const cardH = pad * 2 + ch * (0.06 + 0.042 + 0.095) + giftH + statH + goalH + nBtn * (btnH + btnGap) + adH + homeH;
   const cardW = Math.min(cw * 0.4, ch * 1.2);
   const cardX = (cw - cardW) / 2, cardY = Math.max(ch * 0.02, (ch - cardH) / 2);
   uiCard(cardX, cardY, cardW, cardH);
@@ -3438,6 +3849,10 @@ function uiDrawDead(){
   if(deadCard.sub) dText(deadCard.sub, cx, y + ch * 0.018, fs(0.032), '#ffd34d', 'center', true);
   y += ch * 0.042;
   dText(deadCard.score, cx, y + ch * 0.045, fs(0.075), '#ffd34d', 'center', true);      y += ch * 0.095;
+  if(giftTease){   // 【留存包】④ 给"明天再来"一个看得见的理由
+    dText('明天来领 🎁200 金币', cx, y + ch * 0.012, fs(0.026), '#ffd9a0', 'center');
+    y += ch * 0.036;
+  }
   for(const s of deadCard.stats){
     dText(fitText(s, inW, fs(0.028)), cx, y + ch * 0.018, fs(0.028), '#aab6d0', 'center');
     y += ch * 0.042;
@@ -3464,6 +3879,12 @@ function uiDrawDead(){
     uiBtn({ id: 'deadRevive', x: inX, y: y, w: inW, h: btnH, label: revTxt, size: fs(0.036),
             bg: '#ffd34d', fg: '#4a3500', cb(){ if(game.state !== 'dead') return; revive(); } });
     y += btnH + btnGap;
+  }
+  if(!dailyMode){   // 【留存包】⑦ 看广告免费复活：广告位还没申请下来，先灰着占位（adReady 永远 false → 不登记点击区）
+    uiBtn({ id: 'deadAdRevive', x: inX, y: y, w: inW, h: ch * 0.06, label: '📺 看广告免费复活（即将开放）',
+            size: fs(0.026), bold: false, disabled: !adReady(),
+            cb: adReady() ? function(){ /* 以后在这里接 wx.createRewardedVideoAd(AD.rewardedId) */ } : null });
+    y += ch * 0.06 + btnGap;
   }
   uiBtn({ id: 'deadAgain', x: inX, y: y, w: inW, h: btnH, label: '🔁 再来一局', size: fs(0.036),
           bg: 'rgba(255,255,255,0.16)', fg: '#fff', cb(){ if(game.state !== 'dead') return; ensureAudio(); startGame(); } });
@@ -3586,13 +4007,16 @@ const UI = {
       }
     }
     pressJump('pointer');   // 谁都没点中：这一下是游戏操作（跳跃/暂停恢复）
-    if(game.state === 'playing') startBGM();
+    if(game.state === 'playing' || homeOpen()) startBGM();   // 【主页音乐】大厅也有 BGM
   },
   touchMove(x, y){   // 手指拖动：目前只有商店货架需要滚
     uiTouch.moved += Math.abs(x - uiTouch.x) + Math.abs(y - uiTouch.y);
     if(uiTouch.moved > canvas.height * 0.03) uiTouch.pendId = null;   // 拖远了＝滚动手势，取消待点按钮
     if(uiTouch.on && shopOpen()){
       shopScroll = clamp(shopScroll + (y - uiTouch.y), Math.min(0, shopViewH - shopContentH), 0);
+    }
+    if(uiTouch.on && uiScreen === 'ach'){   // 【留存包】成就列表也能拖着滚（和商店货架同一套手感）
+      achScroll = clamp(achScroll + (y - uiTouch.y), Math.min(0, achViewH - achContentH), 0);
     }
     uiTouch.x = x; uiTouch.y = y;
   },
@@ -3614,7 +4038,7 @@ const UI = {
       releaseJump('pointer');
     }
     ensureAudio();
-    if(game.state === 'playing') startBGM();
+    if(game.state === 'playing' || homeOpen()) startBGM();   // 【主页音乐】大厅也有 BGM
   },
   tap(id){   // 测试台用：按 id 直接触发某个按钮
     for(let i = UI.zones.length - 1; i >= 0; i--){
@@ -3626,6 +4050,8 @@ const UI = {
   drawHome: uiDrawHome,
   drawShop: uiDrawShop,
   drawSign: uiDrawSign,
+  drawRank: uiDrawRank,   // 【留存包】好友排行榜
+  drawAch: uiDrawAch,     // 【留存包】成就页
   drawDead: uiDrawDead,
   drawAvatarAsk: uiDrawAvatarAsk,
   drawGameBtns: uiDrawGameBtns,
@@ -3640,7 +4066,7 @@ try{
     const nick = save.nick || '神秘小狐狸';
     if(game.best > 0){
       return {
-        title: nick + '在狐狸快跑呀跑了' + game.best + '分，不服来战！',
+        title: playerTitle() + nick + '在狐狸快跑呀跑了' + game.best + '分，不服来战！',   // 【留存包】⑤ 称号挂在昵称前面，如【连击之神】
         query: 'c=' + game.best + '&n=' + encodeURIComponent(nick) + '&s=' + challengeSum(game.best, nick),
       };
     }
@@ -3682,6 +4108,8 @@ function frame(t){
   if(showDead) UI.drawDead();   // 【小游戏改造】原来是 DOM 卡片（#deadCard），现在直接画
   if(shopOpen()) UI.drawShop();   // 【小游戏改造】商店开着＝游戏已暂停；货架小动物每帧重画所以是活的
   if(signOpen()) UI.drawSign();   // 【小游戏改造】签到日历
+  if(uiScreen === 'rank') UI.drawRank();   // 【留存包】好友排行榜（榜单内容由开放数据域画）
+  if(uiScreen === 'ach') UI.drawAch();     // 【留存包】成就页
   if(avatarAskOpen()) UI.drawAvatarAsk();   // 【小游戏改造】"把主角换成你"小卡片，画在最上层
   if(loadingStart){                       // 加载过场：合拢→开局→揭开→3·2·1
     drawLoading(); blitLoading();   // 【小游戏改造】
