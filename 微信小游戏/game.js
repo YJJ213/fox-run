@@ -12,9 +12,14 @@ const GROUND_Y = 256;          // 地面顶端的 y 坐标。注意：画布的 
 const GRAVITY  = 2400;         // 重力加速度（像素/秒²）
 const JUMP_VY  = -820;         // 起跳瞬间的向上速度（负数代表向上）
 const JUMP_CUT = -420;         // 提前松开跳跃键时，上升速度立刻衰减到这个值 →"长按跳更高"（越接近 0，轻点跳得越矮）
-const SPEED_START = 330;       // 初始奔跑速度
-const SPEED_MAX   = 740;       // 速度上限
-const SPEED_RAMP  = 9;         // 每秒增加多少速度（难度曲线）
+const SPEED_START = 280;       // 初始奔跑速度（前几百米当热身，别吓跑新手）
+const SPEED_MAX   = 820;       // 速度上限（后期才真正狂飙）
+// 加速度分段递增：跑得越远提速越狠——"从慢到快、越来越难"的难度曲线
+// 旧版是恒定 +9/秒，45 秒就飙到顶速；现在前 400 米很温柔，3500 米后才是地狱
+function speedRamp(){
+  const m = game.runDist / 12;   // 当前里程（米）
+  return m < 400 ? 6 : m < 1500 ? 10 : m < 3500 ? 13 : 16;
+}
 const COYOTE = 0.08;           // 土狼时间：离开地面后这么多秒内仍允许起跳（经典手感技巧）
 const BUFFER = 0.12;           // 跳跃缓冲：落地前这么多秒内按下的跳跃，落地瞬间会自动执行
 const CYCLE  = 80;             // 昼夜循环一圈的秒数
@@ -256,33 +261,66 @@ function toggleMute(){
 let startAfterAvatar = false;   // 弹窗关闭后是否直接开局
 function avatarAskOpen(){ return uiAvatarAsk; }   // 【小游戏改造】开关由画布 UI 层维护
 
-/* —— 背景音乐：三首小曲子，跑得越远节奏越快（0~2500米 / 2500~5000 / 5000+） —— */
+/* —— 背景音乐：三个乐章 × 每章两首，跑得越远节奏越快（0~2500米 / 2500~5000 / 5000+） —— */
 // 数字是 MIDI 音高（69 = 标准音 A4，每 +12 升一个八度），0 = 休止符
+// 【音乐多样化】BGM_TRACKS[乐章][第几首]：每个乐章准备了 A/B 两首，开局抽一首听到底，免得听腻
 const BGM_TRACKS = [
-  { step: 0.25,   // 第一乐章：悠闲（C→G→Am→F 万能四和弦）
-    melody: [ 76,79,84,79, 76,79,72,76,  74,79,83,79, 74,79,71,74,
-              76,81,84,81, 76,81,72,76,  77,81,84,81, 77,84,81,77 ],
-    bass:   [ 48,55,48,55, 43,50,43,50, 45,52,45,52, 41,48,41,48 ] },
-  { step: 0.22,   // 第二乐章：加速（Am→F→C→G，更有冲劲）
-    melody: [ 81,84,88,84, 81,84,76,81,  77,81,84,81, 77,81,72,77,
-              76,79,84,79, 76,79,72,76,  79,83,86,83, 79,83,74,79 ],
-    bass:   [ 45,52,45,52, 41,48,41,48, 48,55,48,55, 43,50,43,50 ] },
-  { step: 0.19,   // 第三乐章：狂飙（Em→C→G→D，高潮段）
-    melody: [ 76,79,83,88, 83,79,76,79,  72,76,79,84, 79,76,72,76,
-              79,83,86,91, 86,83,79,83,  74,78,81,86, 81,78,74,78 ],
-    bass:   [ 40,47,40,47, 36,43,36,43, 43,50,43,50, 38,45,38,45 ] },
+  [ // —— 第一乐章（0~2500米）——
+    { step: 0.25,   // 曲A·悠闲：C→G→Am→F 万能四和弦（原版）
+      melody: [ 76,79,84,79, 76,79,72,76,  74,79,83,79, 74,79,71,74,
+                76,81,84,81, 76,81,72,76,  77,81,84,81, 77,84,81,77 ],
+      bass:   [ 48,55,48,55, 43,50,43,50, 45,52,45,52, 41,48,41,48 ] },
+    { step: 0.25,   // 曲B·轻快民谣：F→C→G→Am，旋律一级一级走（像哼小曲），不是琶音
+      melody: [ 77,79,81,77, 81,79,77,74,  76,77,79,76, 72,74,76,72,
+                74,76,79,81, 79,76,74,71,  72,74,76,77, 76,74,72,69 ],
+      bass:   [ 41,48,45,48, 36,43,40,43, 43,50,47,50, 45,52,48,52 ] },
+  ],
+  [ // —— 第二乐章（2500~5000米）——
+    { step: 0.22,   // 曲A·加速：Am→F→C→G，更有冲劲（原版）
+      melody: [ 81,84,88,84, 81,84,76,81,  77,81,84,81, 77,81,72,77,
+                76,79,84,79, 76,79,72,76,  79,83,86,83, 79,83,74,79 ],
+      bass:   [ 45,52,45,52, 41,48,41,48, 48,55,48,55, 43,50,43,50 ] },
+    { step: 0.22,   // 曲B·电子小调：Am→G→F→E 一路下沉，休止符断奏 + 低音蹦八度，像合成器
+      melody: [ 81,0,81,84, 81,0,76,81,  79,0,79,83, 79,0,74,79,
+                77,0,77,81, 77,0,72,77,  76,0,76,80, 76,80,83,88 ],
+      bass:   [ 45,57,45,57, 43,55,43,55, 41,53,41,53, 40,52,40,52 ] },
+  ],
+  [ // —— 第三乐章（5000米+）——
+    { step: 0.19,   // 曲A·狂飙：Em→C→G→D，高潮段（原版）
+      melody: [ 76,79,83,88, 83,79,76,79,  72,76,79,84, 79,76,72,76,
+                79,83,86,91, 86,83,79,83,  74,78,81,86, 81,78,74,78 ],
+      bass:   [ 40,47,40,47, 36,43,36,43, 43,50,43,50, 38,45,38,45 ] },
+    { step: 0.18,   // 曲B·急板：Dm→B♭→F→A 小调冲刺，结尾一口气冲上最高音再绕回开头
+      melody: [ 74,77,81,86, 81,77,74,77,  70,74,77,82, 77,74,70,74,
+                72,77,81,84, 81,77,72,77,  73,76,81,85, 81,85,88,91 ],
+      bass:   [ 38,45,38,45, 46,53,46,53, 41,48,41,48, 45,52,45,52 ] },
+  ],
 ];
+// 【音乐多样化】奖励关专属欢快小调：C 大调琶音节节向上，48 个音 × 0.16 秒 ≈ 8 秒一圈
+const BGM_BONUS = {
+  step: 0.16,
+  melody: [ 72,76,79,84, 76,79,84,88,  77,81,84,89, 81,84,89,84,
+            79,83,86,91, 86,83,79,83,  72,76,79,84, 88,84,79,76,
+            69,72,76,81, 72,76,81,84,  79,83,86,88, 91,0,84,0 ],
+  bass:   [ 48,55,48,55, 41,48,41,48, 43,50,43,50, 48,55,48,55, 45,52,45,52, 43,50,36,48 ],
+};
 // 当前该放第几乐章：按本局跑的里程分段
 function bgmTier(){
   if(game.state !== 'playing') return 0;
   const m = game.runDist / 12;
   return m >= 5000 ? 2 : m >= 2500 ? 1 : 0;
 }
-const bgm = { on: false, step: 0, nextTime: 0, timer: null };
+let bgmVariant = 0;   // 【音乐多样化】这一局每个乐章听第几首（0=曲A 1=曲B，开局抽签、整局固定）
+const bgm = { on: false, step: 0, nextTime: 0, timer: null, track: null };   // track = 此刻正在放的那首
 
 function midiToFreq(m){ return 440 * Math.pow(2, (m - 69) / 12); }
 function playNote(midi, t, dur, type, vol){
   playTone(midiToFreq(midi), midiToFreq(midi), dur, type, vol, t);   // 【小游戏改造】走 PCM 合成
+}
+// 【音乐多样化】此刻该放哪首：奖励关期间优先放专属欢快小调；平时按里程乐章 + 本局抽中的 A/B
+function bgmPick(){
+  if(game.state === 'playing' && bgTime < bonusUntil) return BGM_BONUS;   // 奖励关结束自然切回
+  return BGM_TRACKS[bgmTier()][bgmVariant];
 }
 // WebAudio 的常用玩法：用一个普通定时器，把"接下来一秒多"的音符提前排进播放队列
 function scheduleBGM(){
@@ -290,7 +328,8 @@ function scheduleBGM(){
   if(paused || appHidden) return;   // 【小游戏改造】   // 暂停或切到后台时，音乐也跟着停
   // 停了一阵子（暂停/后台回来）的话，把排队起点拉回"现在"，避免一瞬间补播一堆旧音符
   if(bgm.nextTime < actx.currentTime) bgm.nextTime = actx.currentTime + 0.05;
-  const trk = BGM_TRACKS[bgmTier()];
+  const trk = bgmPick();
+  if(trk !== bgm.track){ bgm.track = trk; bgm.step = 0; }   // 【音乐多样化】换乐章/换曲子：拍子从头数，防止下标错位
   while(bgm.nextTime < actx.currentTime + 1.2){
     const i = bgm.step % trk.melody.length;
     if(trk.melody[i]) playNote(trk.melody[i], bgm.nextTime, trk.step * 0.9, 'square', 0.013);
@@ -697,6 +736,8 @@ function startGame(){
   bunny = null; distToBunny = 6000 + Math.random() * 4000;
   banner.until = 0; petPulseAt = 0; petPulseUntil = 0;
   recordFlagShown = false; curBgmTier = 0;
+  bgmVariant = Math.random() < 0.5 ? 0 : 1;   // 【音乐多样化】开局抽签：这一局听曲A还是曲B（整局固定，不每帧乱换）
+  bgm.step = 0; bgm.track = null;             // 新一局旋律从头唱
   // 出发加成：在主页买好的 buff 这一局生效（日赛不可用，保证公平）
   boostDist = 0;
   if(!dailyMode){
@@ -969,7 +1010,8 @@ function spawnObstacle(){
     return;
   }
   // 段落结束：到下一段的间距用原公式（含密度递增）
-  const densK = Math.max(0.65, 1 - d / 9000);
+  // 障碍密度曲线：开局更稀疏（热身段），后期挤到只剩 55% 间距（地狱段）
+  const densK = (d < 300 ? 1.25 : 1) * Math.max(0.55, 1 - d / 7000);
   distToObstacle = (game.speed * dashMult() * 0.6 + 280 + srand() * 320) * densK;
 }
 function spawnCoins(){
@@ -1160,7 +1202,7 @@ function update(dt){
   }
   if(!stormNow) goldStorm = false;
 
-  game.speed = Math.min(SPEED_MAX, game.speed + SPEED_RAMP * dt);
+  game.speed = Math.min(SPEED_MAX, game.speed + speedRamp() * dt);   // 加速度随里程递增
   // 冲刺道具生效时世界加速 1.8 倍（相对地，就是狐狸在狂奔）
   const move = game.speed * dashMult() * (bgTime < slowUntil ? 0.55 : 1) * dt;   // 时停：世界慢 45%
   game.dist += move; game.runDist += move;
@@ -2952,45 +2994,117 @@ function updateDeadCard(){
   deadCard.goal = dailyMode ? null : nextGoal();
 }
 
-/* —— 主页大厅（元素与网页版 renderHome 一一对应） —— */
+/* —— 主页大厅（【主页改版】参考主流跑酷手游的横屏大厅排版） ——
+   ┌──────────────────────────────────────────────────┐
+   │ 💰胶囊 💎胶囊       像素大标题(场景画的)      (微信胶囊) │
+   │                     昵称📝 / 🏆战绩一行小字            │
+   │    ✨发光展台                      🦊 开始游戏(超大)    │
+   │    大号出战角色                   挑战 | 商店 | 签到    │
+   │ 今日任务胶囊×3                       出发加成 2×2      │
+   └──────────────────────────────────────────────────┘
+   元素和点击逻辑与旧版一一对应（按钮 id 一个没改），改的只是"摆在哪、长多大" */
 function uiDrawHome(){
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   const cw = canvas.width, ch = canvas.height;
   const fs = k => Math.max(9, Math.round(ch * k));
   const cx = cw / 2;
-  // —— 统计面板：最高分 / 钱包 / 连签（+ 周末活动 / 挑战书） ——
-  const lines = ['最高 ' + game.best + ' 分 · 💰' + save.coins + ' · 💎' + save.gems +
-                 (save.streak ? ' · 已连签 ' + save.streak + ' 天' : '')];
-  if(weekendBoost()) lines.push('🎉 周末狂欢：金币双倍进行中！');
-  if(challenge) lines.push('🆚 ' + challenge.name + ' 向你发起挑战：' + challenge.score + ' 分');
-  const stW = cw * 0.42, lineH = ch * 0.048;
-  const stH = lines.length * lineH + ch * 0.024;
-  const stY = ch * 0.30;
-  uiPanel(cx - stW / 2, stY, stW, stH);
-  lines.forEach((s, i) => dText(s, cx, stY + ch * 0.012 + lineH * (i + 0.5), fs(0.034), '#c5cede', 'center'));
-  // —— 昵称行（点了弹微信键盘改名，会写进挑战分享卡片） ——
-  const nickY = stY + stH + ch * 0.012;
-  dText('昵称：' + (save.nick || '神秘小狐狸') + '  📝', cx, nickY + ch * 0.026, fs(0.032), '#97a1b8', 'center');
-  addZone('homeNick', cx - cw * 0.13, nickY, cw * 0.26, ch * 0.052, editNick);
-  // —— 大大的开始按钮（回显已买的出发加成：钱花到位了，看得见） ——
-  const sw2 = cw * 0.32, sh2 = ch * 0.125, sy2 = nickY + ch * 0.064;
-  uiBtn({ id: 'homeStart', x: cx - sw2 / 2, y: sy2, w: sw2, h: sh2,
-    label: '🦊 开始游戏' + (pendingSprint ? ' · 🚀' + pendingSprint + '米' : '') + (pendingShield ? ' · 🛡️' : ''),
-    size: fs(0.05), bg: '#ffd34d', fg: '#4a3500', stroke: '#3a2a00',
+  const t = performance.now() / 1000;   // 【主页改版】呼吸/脉动动画共用的时钟（秒）
+
+  // —— 顶部左：货币胶囊（主流手游都把钱包钉在左上角；SAFE.l = 刘海宽度，往右让开） ——
+  const capH = ch * 0.065;
+  let capX = SAFE.l + ch * 0.03;
+  const capY = ch * 0.035;
+  const moneyCap = (txt, color) => {   // 画一颗"深色圆角底 + 数字"的小胶囊，宽度按文字自适应
+    ctx.font = 'bold ' + fs(0.034) + 'px ' + FONT;
+    const w2 = ctx.measureText(txt).width + capH * 1.1;
+    ctx.fillStyle = 'rgba(13,16,36,0.85)';
+    dRR(capX, capY, w2, capH, capH / 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = Math.max(1, ch * 0.004);
+    dRR(capX, capY, w2, capH, capH / 2); ctx.stroke();
+    dText(txt, capX + w2 / 2, capY + capH / 2, fs(0.034), color, 'center', true);
+    capX += w2 + ch * 0.018;   // 下一颗胶囊接着往右排
+  };
+  moneyCap('💰 ' + save.coins, '#ffd34d');
+  moneyCap('💎 ' + save.gems, '#8ee6ff');
+
+  // —— 标题正下方：昵称一行 + 战绩一行小字（旧版的大统计面板瘦身成两行字，不再挡场景） ——
+  const nickY = ch * 0.44;
+  dText('昵称：' + (save.nick || '神秘小狐狸') + '  📝', cx, nickY, fs(0.032), '#dfe6f5', 'center');
+  addZone('homeNick', cx - cw * 0.13, nickY - ch * 0.03, cw * 0.26, ch * 0.06, editNick);
+  dText('🏆 最高 ' + game.best + ' 分' + (save.streak ? ' · 🔥 连签 ' + save.streak + ' 天' : ''),
+        cx, nickY + ch * 0.052, fs(0.028), '#97a1b8', 'center');
+  // 偶尔出现的活动/挑战信息：再往下小字提一句（fitText 限宽，免得伸到右边开始按钮底下）
+  let evY = nickY + ch * 0.103;
+  if(weekendBoost()){
+    dText(fitText('🎉 周末狂欢：金币双倍进行中！', cw * 0.2, fs(0.028), true), cx, evY, fs(0.028), '#ffd9a0', 'center', true);
+    evY += ch * 0.048;
+  }
+  if(challenge) dText(fitText('🆚 ' + challenge.name + ' 挑战你：' + challenge.score + ' 分', cw * 0.2, fs(0.028), true),
+                      cx, evY, fs(0.028), '#ff8aa0', 'center', true);
+
+  // —— 左侧中部：出战角色大展台（点角色 = 进商店换人，和大厂跑酷的"角色橱窗"一个意思） ——
+  const s2 = ch / 180;                    // 像素场景的放大倍数（场景是 320×180 的低清图）
+  const heroH = ch * 0.31;                // 角色总高 ≈ 屏高 31%（约等于游戏里的 2.2 倍大）
+  const heroK = heroH / 56;               // drawCharacter 画出来的角色约 56 个单位高
+  // 站位对准场景里原来那只小角色的脚下：大角色一盖上去，就像它走到了台前
+  let heroX = (cw - 320 * s2) / 2 + 64 * s2;
+  heroX = Math.max(heroX, SAFE.l + heroH * 0.6);   // 特别窄的屏幕兜底：别被刘海切到
+  const baseY = 150 * s2;                          // 场景的地面线（低清图里地面在 y=150）
+  // 发光圆台：两层椭圆叠出光晕，亮度跟着时间慢慢呼吸
+  const glow = 0.5 + 0.5 * Math.sin(t * 2.2);
+  ctx.fillStyle = '#ffd34d';
+  ctx.globalAlpha = 0.10 + 0.08 * glow;
+  ctx.beginPath(); ctx.ellipse(heroX, baseY, heroH * 0.62, heroH * 0.17, 0, 0, TAU); ctx.fill();
+  ctx.globalAlpha = 0.20 + 0.12 * glow;
+  ctx.beginPath(); ctx.ellipse(heroX, baseY, heroH * 0.46, heroH * 0.12, 0, 0, TAU); ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = Math.max(1, ch * 0.004);
+  ctx.beginPath(); ctx.ellipse(heroX, baseY, heroH * 0.46, heroH * 0.12, 0, 0, TAU); ctx.stroke();
+  // 大号角色本体：原地小跑 + 眨眼（参数和场景里那只完全一样，盖上去严丝合缝），
+  // 再加一点"呼吸"：横向胖一点点、纵向矮一点点，脚始终钉在地上（商店预览 drawCharPreview 同款画法）
+  ctx.save();
+  ctx.translate(heroX, baseY);
+  const breath = 1 + 0.02 * Math.sin(t * 2.6);
+  ctx.scale(heroK * breath, heroK * (2 - breath));
+  drawCharacter(ctx, CHARS[save.char] || CHARS.fox, {
+    time: t, grounded: true, swing: Math.sin(t * 10) * 0.65, gliding: false,
+    blinking: (t % 3) < 0.12 ? 1 : 0, dead: false,
+    pal: charC(save.char in CHARS ? save.char : 'fox'),
+    avatar: (save.useAvatar && avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) ? avatarImg : null,
+  });
+  ctx.restore();
+  // 角色名 + 整块展台都能点：直接开商店
+  dText((CHARS[save.char] || CHARS.fox).name + ' ▸', heroX, baseY + ch * 0.032, fs(0.028), '#c5cede', 'center', true);
+  addZone('homeHero', heroX - heroH * 0.55, baseY - heroH * 1.05, heroH * 1.1, heroH * 1.05 + ch * 0.05,
+          () => { if(!homeOpen() || loadingStart) return; ensureAudio(); toggleShop(true); });
+
+  // —— 右侧中部偏下：超大开始按钮（轻微脉动 1±0.03，回显已买的出发加成） ——
+  const startW = Math.min(cw * 0.30, ch * 0.9);          // 基础宽度（超宽屏不无限拉大）
+  const scx2 = cw - SAFE.r - ch * 0.04 - startW / 2;     // 按钮中心：靠右、避开圆角安全区
+  const scy2 = ch * 0.55;
+  const pulse = 1 + 0.03 * Math.sin(t * 3);              // 【主页改版】缩放脉动：一直轻轻"喊你来点"
+  const sw2 = startW * pulse, sh2 = ch * 0.15 * pulse;
+  const boostTag = (pendingSprint ? ' · 🚀' + pendingSprint + '米' : '') + (pendingShield ? ' · 🛡️' : '');
+  uiBtn({ id: 'homeStart', x: scx2 - sw2 / 2, y: scy2 - sh2 / 2, w: sw2, h: sh2,
+    label: '🦊 开始游戏' + boostTag,
+    size: fs(boostTag ? 0.04 : 0.052),   // 带加成回显时字变多，字号收一点免得挤出按钮
+    bg: '#ffd34d', fg: '#4a3500', stroke: '#3a2a00',
     cb(){ if(!homeOpen() || loadingStart) return; ensureAudio(); uiHome = false; uiScreen = 'none'; startLoading(() => startGame()); } });
-  // —— 三个小入口：今日挑战（第一局先藏着：渐进披露）/ 商店 / 签到 ——
-  const rowY = sy2 + sh2 + ch * 0.02, rowH = ch * 0.095;
+  // 开始按钮正下方一排小入口：今日挑战（第一局先藏着：渐进披露）/ 商店 / 签到
+  const rowY = scy2 + ch * 0.075 + ch * 0.03, rowH = ch * 0.1;
   const defs = [];
   if(save.runs > 0) defs.push(['homeDaily', '🌞 今日挑战',
     () => { if(!homeOpen() || loadingStart) return; ensureAudio(); uiHome = false; uiScreen = 'none'; startLoading(() => startDaily()); }]);
   defs.push(['homeShop', '🛒 商店', () => { if(!homeOpen() || loadingStart) return; ensureAudio(); toggleShop(true); }]);
   defs.push(['homeSign', '📅 签到', () => { if(!homeOpen() || loadingStart) return; ensureAudio(); uiScreen = 'sign'; }]);
-  const bw = cw * 0.105, bGap = cw * 0.012;
+  const bGap = ch * 0.014, bw = (startW - bGap * 2) / 3;   // 三个按钮拼起来正好和开始按钮一样宽
   const totW = defs.length * bw + (defs.length - 1) * bGap;
   defs.forEach((d, i) => {
-    const bx = cx - totW / 2 + i * (bw + bGap);
-    uiBtn({ id: d[0], x: bx, y: rowY, w: bw, h: rowH, label: d[1], size: fs(0.034),
+    const bx = scx2 - totW / 2 + i * (bw + bGap);
+    uiBtn({ id: d[0], x: bx, y: rowY, w: bw, h: rowH, label: d[1], size: fs(0.032),
             bg: 'rgba(13,16,36,0.85)', fg: '#dfe6f5', stroke: 'rgba(255,255,255,0.25)', bold: false, cb: d[2] });
     if(d[0] === 'homeSign' && canClaimSign()){   // 今天还没领签到奖励：画个小红点提醒
       ctx.fillStyle = '#ff4d4d';
@@ -2998,49 +3112,54 @@ function uiDrawHome(){
       ctx.strokeStyle = '#1d2433'; ctx.lineWidth = Math.max(1, ch * 0.004); ctx.stroke();
     }
   });
-  // —— 左侧：今日任务（目标看得见，才有"再来一局"的劲） ——
+
+  // —— 底部左：今日任务三条横排小胶囊（✅/⬜ + 任务名 + 进度；第一局先藏着） ——
   if(save.runs > 0 && save.daily && save.daily.date === todayStr()){
-    const tw = cw * 0.27, tx0 = cw * 0.022, tPad = ch * 0.022, tLineH = ch * 0.052;
-    const tH = tPad * 2 + tLineH * (save.daily.tasks.length + 1);
-    const ty0 = ch * 0.97 - tH;
-    uiPanel(tx0, ty0, tw, tH);
-    dText('📋 今日任务（全清 +1💎）', tx0 + tPad, ty0 + tPad + tLineH * 0.5, fs(0.03), '#97a1b8', 'left', true);
-    save.daily.tasks.forEach((t, i) => {
-      const ly = ty0 + tPad + tLineH * (i + 1.5);
-      const col = t.done ? '#7fd89a' : '#c5cede';
-      dText(fitText((t.done ? '✅ ' : '⬜ ') + taskName(t), tw - tPad * 2 - cw * 0.045, fs(0.03)), tx0 + tPad, ly, fs(0.03), col, 'left');
-      dText(Math.min(t.prog, t.goal) + '/' + t.goal, tx0 + tw - tPad, ly, fs(0.03), col, 'right');
+    const tasks = save.daily.tasks;
+    const capH2 = ch * 0.068, tGap = ch * 0.014;
+    const tx0 = SAFE.l + ch * 0.03;
+    const availW = cw * 0.60 - tx0;   // 最多铺到屏宽 60%，右边留给出发加成
+    const tcw = (availW - tGap * (tasks.length - 1)) / tasks.length;
+    const ty0 = ch * 0.965 - capH2;
+    tasks.forEach((tk, i) => {
+      const x2 = tx0 + i * (tcw + tGap);
+      uiPanel(x2, ty0, tcw, capH2);
+      const col = tk.done ? '#7fd89a' : '#c5cede';
+      const prog = Math.min(tk.prog, tk.goal) + '/' + tk.goal;
+      let txt = (tk.done ? '✅ ' : '⬜ ') + taskName(tk) + ' ' + prog;
+      ctx.font = fs(0.026) + 'px ' + FONT;
+      if(ctx.measureText(txt).width > tcw - capH2 * 0.6){   // 挤不下就只留 图标+进度
+        txt = (tk.done ? '✅ ' : '⬜ ') + prog;
+      }
+      dText(txt, x2 + tcw / 2, ty0 + capH2 / 2, fs(0.026), col, 'center');
     });
   }
-  // —— 右侧：出发加成（仅下一局生效；第一局先藏起来——渐进披露） ——
+
+  // —— 底部右：出发加成 2×2 小按钮（只换了摆法，买/取消/退款逻辑原封没动） ——
   if(save.runs > 0){
-    const bw2 = cw * 0.27, bx0 = cw * 0.978 - bw2, bPad = ch * 0.022;
-    const bBtnH = ch * 0.082, bGap2 = ch * 0.014;
-    const bH = bPad * 2 + ch * 0.042 + bBtnH * 4 + bGap2 * 3;
-    const by0 = ch * 0.97 - bH;
-    uiPanel(bx0, by0, bw2, bH);
-    dText(fitText('出发加成（仅下一局生效，再点一次取消退款）：', bw2 - bPad * 2, fs(0.026)),
-          bx0 + bPad, by0 + bPad + ch * 0.016, fs(0.026), '#97a1b8', 'left');
+    const bw2 = cw * 0.125, bh2 = ch * 0.062, gGap = ch * 0.012;
+    const gx0 = cw - SAFE.r - ch * 0.03 - bw2 * 2 - gGap;   // 2×2 网格的左上角
+    const gy0 = ch * 0.965 - bh2 * 2 - gGap;
+    dText('🎁 出发加成 · 只管下一局 · 再点一次取消退款', gx0 + bw2 * 2 + gGap, gy0 - ch * 0.018, fs(0.022), '#97a1b8', 'right');
     const errOn = k => boostErrKey === k && performance.now() < boostErrUntil;
     const opts = [{ k: 300, cost: 80 }, { k: 500, cost: 150 }, { k: 1000, cost: 300 }];
-    let byy = by0 + bPad + ch * 0.042;
-    for(const o2 of opts){
+    opts.forEach((o2, i) => {   // 三档冲刺占网格的前三格
       const can = pendingSprint === o2.k || save.coins >= o2.cost;
       const on = pendingSprint === o2.k;
-      uiBtn({ id: 'boost-' + o2.k, x: bx0 + bPad, y: byy, w: bw2 - bPad * 2, h: bBtnH,
-        label: errOn(String(o2.k)) ? '金币不够！'
-             : '🚀 冲刺 ' + o2.k + ' 米 · ' + (can ? o2.cost + '💰' : '还差' + (o2.cost - save.coins) + '💰'),
-        size: fs(0.03), bg: on ? '#ffd34d' : 'rgba(255,255,255,0.08)', fg: on ? '#4a3500' : '#dfe6f5',
-        stroke: on ? '#ffd34d' : 'rgba(255,255,255,0.2)', bold: on, alpha: (can || on) ? 1 : 0.55,
+      uiBtn({ id: 'boost-' + o2.k,
+        x: gx0 + (i % 2) * (bw2 + gGap), y: gy0 + Math.floor(i / 2) * (bh2 + gGap), w: bw2, h: bh2,
+        label: errOn(String(o2.k)) ? '金币不够！' : on ? '✅ ' + o2.k + '米 已选'
+             : '🚀' + o2.k + '米 ' + (can ? o2.cost + '💰' : '差' + (o2.cost - save.coins) + '💰'),
+        size: fs(0.026), bg: on ? '#ffd34d' : 'rgba(13,16,36,0.85)', fg: on ? '#4a3500' : '#dfe6f5',
+        stroke: on ? '#ffd34d' : 'rgba(255,255,255,0.25)', bold: on, alpha: (can || on) ? 1 : 0.55,
         cb: () => boostClick(o2.k) });
-      byy += bBtnH + bGap2;
-    }
-    const canS = pendingShield || save.coins >= 60;
-    uiBtn({ id: 'boost-shield', x: bx0 + bPad, y: byy, w: bw2 - bPad * 2, h: bBtnH,
-      label: errOn('shield') ? '金币不够！'
-           : '🛡️ 开局护盾 · ' + (canS ? '60💰' : '还差' + (60 - save.coins) + '💰'),
-      size: fs(0.03), bg: pendingShield ? '#ffd34d' : 'rgba(255,255,255,0.08)', fg: pendingShield ? '#4a3500' : '#dfe6f5',
-      stroke: pendingShield ? '#ffd34d' : 'rgba(255,255,255,0.2)', bold: pendingShield, alpha: canS ? 1 : 0.55,
+    });
+    const canS = pendingShield || save.coins >= 60;   // 护盾占第四格
+    uiBtn({ id: 'boost-shield', x: gx0 + bw2 + gGap, y: gy0 + bh2 + gGap, w: bw2, h: bh2,
+      label: errOn('shield') ? '金币不够！' : pendingShield ? '✅ 护盾 已选'
+           : '🛡️护盾 ' + (canS ? '60💰' : '差' + (60 - save.coins) + '💰'),
+      size: fs(0.026), bg: pendingShield ? '#ffd34d' : 'rgba(13,16,36,0.85)', fg: pendingShield ? '#4a3500' : '#dfe6f5',
+      stroke: pendingShield ? '#ffd34d' : 'rgba(255,255,255,0.25)', bold: pendingShield, alpha: canS ? 1 : 0.55,
       cb: () => boostClick('shield') });
   }
   ctx.restore();
