@@ -1443,6 +1443,10 @@ function spawnItem(){
   for(const o of obstacles){
     if((o.alt || o.type === 'pendulum') && o.x > W - 420){ distToItem = 250; return; }
   }
+  // 坑口上方不出道具：悬在坑上的道具要么够不着、要么引人坠坑，太鸡肋（真机试玩反馈）
+  for(const pt of pits){
+    if(pt.x > W - 280 && pt.x < W + 280){ distToItem = 200; return; }
+  }
   const types = ['dash', 'giant', 'magnet', 'coinx2', 'shield', 'fly', 'slow'];
   items.push({
     x: W + 60,

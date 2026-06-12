@@ -417,7 +417,7 @@ let shieldOn = false;       // 护盾道具：挡一次撞击
 let petPulseAt = 0, petPulseUntil = 0;   // 精灵·星宝的吸金币脉冲计时
 let bunny = null;           // 钻石兔（场上最多一只）
 let distToBunny = 8000;     // 还要跑多远钻石兔才出现
-let nextMeteorAt = 5000;    // ☄️ 流星雨事件的下一个触发里程（米，5000 米后的后期内容）
+let nextMeteorAt = 5000;    // 💫 流星雨事件的下一个触发里程（米，5000 米后的后期内容）
 const banner = { text: '', until: 0, color: '#ffd34d' };   // 屏幕中央的大横幅
 function showBanner(text, dur, color){
   banner.text = text; banner.until = bgTime + dur; banner.color = color || '#ffd34d';
@@ -572,9 +572,9 @@ function parseChallengeQuery(q){
     const cc = parseInt(q.c), nn = decodeURIComponent(q.n || '').slice(0, 12);
     if(cc > 0 && nn && parseInt(q.s) === challengeSum(cc, nn)){
       challenge = { score: cc, name: nn };
-      showBanner('⚔️ ' + nn + ' 向你发起挑战：' + cc + ' 分！', 4, '#ff8aa0');
+      showBanner('🆚 ' + nn + ' 向你发起挑战：' + cc + ' 分！', 4, '#ff8aa0');
     }
-    if(q.d) showBanner('☀️ 朋友喊你来比今日挑战！', 4, '#ffd34d');
+    if(q.d) showBanner('🌞 朋友喊你来比今日挑战！', 4, '#ffd34d');
   }catch(e){}
 }
 try{ parseChallengeQuery(wx.getLaunchOptionsSync().query); }catch(e){}
@@ -789,7 +789,7 @@ function startBonus(){
   taskProg('bonus', 1);
   obstacles.length = 0;
   pits.length = 0;
-  const names = ['🌧 大头雨', '🕊 飞天黄金', '💥 狂暴冲撞'];
+  const names = ['☔ 大头雨', '🦅 飞天黄金', '💥 狂暴冲撞'];
   showBanner('✨ 超级奖励：' + names[bonusKind] + ' ✨', 2.5, '#ffd34d');
   if(bonusKind === 1){        // 飞天黄金：直接起飞，上天吃金币长龙
     power.type = 'fly'; power.total = 6; power.until = bonusUntil;
@@ -815,7 +815,7 @@ function revive(){
   for(let i = obstacles.length - 1; i >= 0; i--){
     if(obstacles[i].x < 700) obstacles.splice(i, 1);   // 清掉眼前的障碍，别复活即死
   }
-  showBanner('❤️ 复活！继续冲！', 1.6, '#ff8aa0');
+  showBanner('💖 复活！继续冲！', 1.6, '#ff8aa0');
   sfx.power();
   startBGM();   // 音乐重新响起
 }
@@ -939,7 +939,7 @@ function spawnObstacle(){
   if(!dailyMode && (save.pitsSeen || 0) < 3 && d > 250 && srand() < 0.2){
     pits.push({ x: W + 80, w: 70, warn: true });
     save.pitsSeen = (save.pitsSeen || 0) + 1;
-    showBanner('⚠️ 前方有坑，跳过去！', 1.8, '#ff8aa0');
+    showBanner('❗ 前方有坑，跳过去！', 1.8, '#ff8aa0');
     return;
   }
   if(!patQueue.length){
@@ -1058,6 +1058,10 @@ function spawnItem(){
   for(const o of obstacles){
     if((o.alt || o.type === 'pendulum') && o.x > W - 420){ distToItem = 250; return; }
   }
+  // 【真机反馈】坑口上方不出道具：悬在坑上的道具要么够不着、要么引人坠坑，太鸡肋
+  for(const pt of pits){
+    if(pt.x > W - 280 && pt.x < W + 280){ distToItem = 200; return; }
+  }
   const types = ['dash', 'giant', 'magnet', 'coinx2', 'shield', 'fly', 'slow'];
   items.push({
     x: W + 60,
@@ -1136,8 +1140,8 @@ function update(dt){
   const tier = bgmTier();
   if(tier !== curBgmTier){
     curBgmTier = tier;
-    if(tier === 1) showBanner('🏜️ 进入沙漠！节奏加快', 2.2, '#ffd9a0');
-    else if(tier === 2) showBanner('❄️ 进入雪夜！最终乐章', 2.2, '#bfe3ff');
+    if(tier === 1) showBanner('🌵 进入沙漠！节奏加快', 2.2, '#ffd9a0');
+    else if(tier === 2) showBanner('⛄ 进入雪夜！最终乐章', 2.2, '#bfe3ff');
   }
   if(power.type && bgTime > power.until){
     // 冲刺/变大结束的瞬间给 0.6 秒缓冲无敌：免得"差一帧就能撞碎"的障碍贴脸把你绊倒
@@ -1276,10 +1280,10 @@ function update(dt){
     }
   }
 
-  // ☄️ 流星雨：5000 米后的专属事件（日赛不触发，保证同图）
+  // 💫 流星雨：5000 米后的专属事件（日赛不触发，保证同图）
   if(!dailyMode && !inBonus && game.runDist / 12 >= nextMeteorAt){
     nextMeteorAt = game.runDist / 12 + 800 + Math.random() * 400;
-    showBanner('☄️ 流星雨来袭！盯住地上的阴影', 2.2, '#ff8a5c');
+    showBanner('💫 流星雨来袭！盯住地上的阴影', 2.2, '#ff8a5c');
     for(let i = 0; i < 3; i++){
       obstacles.push({ type: 'meteor', x: W + 200 + i * 240, w: 30, h: 30, dropAt: bgTime + 1.2 + i * 0.35 });
     }
@@ -1415,7 +1419,7 @@ function update(dt){
     save.lastBeat = challenge.name;
     save.coins += 100;
     saveSave();
-    showBanner('⚔️ 击败了 ' + challenge.name + '！奖励 +100💰，转发回去让他好看', 3, '#ffd34d');
+    showBanner('🆚 击败了 ' + challenge.name + '！奖励 +100💰，转发回去让他好看', 3, '#ffd34d');
     sfx.power();
   }
   // 纪录旗快到了：提示一次
@@ -2323,11 +2327,11 @@ function drawHUD(){
   let subLine, subColor;
   if(dailyMode){
     const drB = (save.dailyRun && save.dailyRun.date === todayStr()) ? save.dailyRun.best : 0;
-    subLine = '☀️ 今日挑战 · 今日最佳 ' + drB + ' 分'; subColor = '#ffd34d';
+    subLine = '🌞 今日挑战 · 今日最佳 ' + drB + ' 分'; subColor = '#ffd34d';
   } else if(breaking){
     subLine = '🔥 新纪录进行中！'; subColor = '#ffd34d';
   } else if(challenge && save.lastBeat !== challenge.name && game.score <= challenge.score){
-    subLine = '⚔️ 距击败 ' + challenge.name + ' 还差 ' + (challenge.score - game.score + 1) + ' 分'; subColor = '#ff8aa0';
+    subLine = '🆚 距击败 ' + challenge.name + ' 还差 ' + (challenge.score - game.score + 1) + ' 分'; subColor = '#ff8aa0';
   } else if(game.startBest > 0){
     subLine = '距最高纪录还差 ' + Math.max(1, game.startBest - game.score + 1) + ' 分'; subColor = '#c5cede';
   } else {
@@ -2369,7 +2373,7 @@ function drawHUD(){
   ctx.font = 'bold 17px ' + FONT;
   ctx.translate(-hudInsetL, 0);   // 【小游戏改造】下面是屏幕正中的文字，挪回真正的中心
   ctx.textAlign = 'center';
-  hudText(dailyMode ? '☀️ ' + Math.min(3000, Math.floor(game.runDist / 12)) + ' / 3000 米'
+  hudText(dailyMode ? '🌞 ' + Math.min(3000, Math.floor(game.runDist / 12)) + ' / 3000 米'
                     : '最高 ' + game.best, W / 2, 14);
   if(boostDist > 0 && game.runDist < boostDist && game.state === 'playing'){
     ctx.font = 'bold 16px ' + FONT;
@@ -2405,7 +2409,7 @@ function drawOverlay(){
       ctx.font = 'bold 30px ' + FONT;
       ctx.fillText('已暂停', W / 2, H / 2 - 12);
       ctx.font = '15px ' + FONT;
-      ctx.fillText('点击屏幕 / 按 P 继续', W / 2, H / 2 + 24);
+      ctx.fillText('点击屏幕继续', W / 2, H / 2 + 24);
     }
     return;
   }
@@ -2415,21 +2419,21 @@ function drawOverlay(){
     ctx.fillText('狐狸快跑', W / 2, H / 2 - 46);
     ctx.fillStyle = '#ffe9c4';
     ctx.font = '17px ' + FONT;
-    ctx.fillText('按 空格 或 点击屏幕 开始', W / 2, H / 2 + 8);
+    ctx.fillText('点击屏幕 开始', W / 2, H / 2 + 8);
     ctx.fillStyle = '#aab6d0';
     ctx.font = '14px ' + FONT;
     ctx.fillText('黑坑会摔死——看到坑就跳！其他障碍只扣分', W / 2, H / 2 + 36);
     const dly = (save.daily && save.daily.date === todayStr()) ? save.daily : null;
     if(dly){
       const doneN0 = dly.tasks.filter(t => t.done).length;
-      ctx.fillText('📋 今日任务 ' + doneN0 + '/3：' + dly.tasks.map(t => (t.done ? '✅' : '◻') + taskName(t)).join('　'), W / 2, H / 2 + 58);
+      ctx.fillText('📋 今日任务 ' + doneN0 + '/3：' + dly.tasks.map(t => (t.done ? '✅' : '⬜') + taskName(t)).join('　'), W / 2, H / 2 + 58);
     } else {
       ctx.fillText('吃道具变强 · 金币攒起来逛商店（按 B） · 左下角还有今日挑战', W / 2, H / 2 + 58);
     }
     if(challenge){
       ctx.fillStyle = '#ff8aa0';
       ctx.font = 'bold 16px ' + FONT;
-      ctx.fillText('⚔️ ' + challenge.name + ' 向你发起挑战：' + challenge.score + ' 分', W / 2, H / 2 + 84);
+      ctx.fillText('🆚 ' + challenge.name + ' 向你发起挑战：' + challenge.score + ' 分', W / 2, H / 2 + 84);
     }
   } else if(game.state === 'dead'){
     // 结算文字都在 DOM 卡片（#deadCard）里，这里只保留遮罩和角色倒地的画面
@@ -2689,7 +2693,7 @@ const SHOP_GOODS = [
 ];
 // 钻石商店的高级货（价格与网页版一致）
 const GEM_GOODS = [
-  { id: 'mount', name: '坐骑·筋斗云',   desc: '脚踩白云：所有角色额外 +1 段跳！', emoji: '☁️', cost: 25 },
+  { id: 'mount', name: '坐骑·筋斗云',   desc: '脚踩白云：所有角色额外 +1 段跳！', emoji: '⛅', cost: 25 },
   { id: 'board', name: '坐骑·火箭滑板', desc: '+1 段跳，并且每局免费开局冲刺 200 米！', emoji: '🛹', cost: 40 },
   { id: 'pet',   name: '精灵·星宝',     desc: '飘在身边的小精灵，每 8 秒自动帮你吸一波金币', emoji: '🧚', cost: 12 },
   { id: 'moth',  name: '精灵·月光蝶',   desc: '每局一次：掉坑的瞬间把你救回空中！', emoji: '🦋', cost: 18 },
@@ -2846,7 +2850,7 @@ function closeSign(){ uiScreen = homeOpen() ? 'home' : 'none'; }
 function startDaily(){
   dailyMode = true;
   startGame();
-  showBanner('☀️ 今日挑战：全国同一张图，跑满 3000 米！', 2.8, '#ffd34d');
+  showBanner('🌞 今日挑战：全国同一张图，跑满 3000 米！', 2.8, '#ffd34d');
 }
 function goHome(){
   dailyMode = false;
@@ -2858,6 +2862,22 @@ function goHome(){
     startAfterAvatar = false;
     uiAvatarAsk = true;
   }
+}
+function quitToHome(){   // 跑到一半不玩了：本局不结算，直接回大厅
+  stopBGM();
+  paused = false; resumeUntil = 0;
+  goHome();
+}
+function uiDrawPauseMenu(){   // 暂停时屏幕中央给一个"回主页"出口（真机反馈：以前死路一条）
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const cw = canvas.width, ch = canvas.height;
+  const fs = k => Math.max(9, Math.round(ch * k));   // 字号小工具（和其他界面函数一样按屏高算）
+  const bw = cw * 0.2, bh = ch * 0.105;
+  uiBtn({ id: 'pauseHome', x: (cw - bw) / 2, y: ch * 0.66, w: bw, h: bh, label: '🏠 回主页',
+          size: fs(0.04), bg: 'rgba(13,16,36,0.85)', fg: '#dfe6f5', stroke: 'rgba(255,255,255,0.25)',
+          bold: false, cb(){ quitToHome(); } });
+  ctx.restore();
 }
 function copyDaily(){   // 复制日赛战报（文案拼法照抄网页版 copyBtn）
   const dr = (save.dailyRun && save.dailyRun.date === todayStr()) ? save.dailyRun : { best: game.score, tries: 1 };
@@ -2927,7 +2947,7 @@ function updateDeadCard(){
   } else {
     const doneN = (save.daily && save.daily.date === todayStr()) ? save.daily.tasks.filter(t => t.done).length : 0;
     deadCard.stats = ['本局金币 +' + game.coinCount + ' · 最高纪录 ' + game.best + ' · 今日任务 ' + doneN + '/3'];
-    if(challenge && game.score > challenge.score) deadCard.stats.push('⚔️ 击败了 ' + challenge.name + '！转发链接回去让他好看');
+    if(challenge && game.score > challenge.score) deadCard.stats.push('🆚 击败了 ' + challenge.name + '！转发链接回去让他好看');
   }
   deadCard.goal = dailyMode ? null : nextGoal();
 }
@@ -2943,7 +2963,7 @@ function uiDrawHome(){
   const lines = ['最高 ' + game.best + ' 分 · 💰' + save.coins + ' · 💎' + save.gems +
                  (save.streak ? ' · 已连签 ' + save.streak + ' 天' : '')];
   if(weekendBoost()) lines.push('🎉 周末狂欢：金币双倍进行中！');
-  if(challenge) lines.push('⚔️ ' + challenge.name + ' 向你发起挑战：' + challenge.score + ' 分');
+  if(challenge) lines.push('🆚 ' + challenge.name + ' 向你发起挑战：' + challenge.score + ' 分');
   const stW = cw * 0.42, lineH = ch * 0.048;
   const stH = lines.length * lineH + ch * 0.024;
   const stY = ch * 0.30;
@@ -2951,18 +2971,18 @@ function uiDrawHome(){
   lines.forEach((s, i) => dText(s, cx, stY + ch * 0.012 + lineH * (i + 0.5), fs(0.034), '#c5cede', 'center'));
   // —— 昵称行（点了弹微信键盘改名，会写进挑战分享卡片） ——
   const nickY = stY + stH + ch * 0.012;
-  dText('昵称：' + (save.nick || '神秘小狐狸') + '  ✏️', cx, nickY + ch * 0.026, fs(0.032), '#97a1b8', 'center');
+  dText('昵称：' + (save.nick || '神秘小狐狸') + '  📝', cx, nickY + ch * 0.026, fs(0.032), '#97a1b8', 'center');
   addZone('homeNick', cx - cw * 0.13, nickY, cw * 0.26, ch * 0.052, editNick);
   // —— 大大的开始按钮（回显已买的出发加成：钱花到位了，看得见） ——
   const sw2 = cw * 0.32, sh2 = ch * 0.125, sy2 = nickY + ch * 0.064;
   uiBtn({ id: 'homeStart', x: cx - sw2 / 2, y: sy2, w: sw2, h: sh2,
-    label: '▶️ 开始游戏' + (pendingSprint ? ' · 🚀' + pendingSprint + '米' : '') + (pendingShield ? ' · 🛡' : ''),
+    label: '🦊 开始游戏' + (pendingSprint ? ' · 🚀' + pendingSprint + '米' : '') + (pendingShield ? ' · 🛡️' : ''),
     size: fs(0.05), bg: '#ffd34d', fg: '#4a3500', stroke: '#3a2a00',
     cb(){ if(!homeOpen() || loadingStart) return; ensureAudio(); uiHome = false; uiScreen = 'none'; startLoading(() => startGame()); } });
   // —— 三个小入口：今日挑战（第一局先藏着：渐进披露）/ 商店 / 签到 ——
   const rowY = sy2 + sh2 + ch * 0.02, rowH = ch * 0.095;
   const defs = [];
-  if(save.runs > 0) defs.push(['homeDaily', '☀️ 今日挑战',
+  if(save.runs > 0) defs.push(['homeDaily', '🌞 今日挑战',
     () => { if(!homeOpen() || loadingStart) return; ensureAudio(); uiHome = false; uiScreen = 'none'; startLoading(() => startDaily()); }]);
   defs.push(['homeShop', '🛒 商店', () => { if(!homeOpen() || loadingStart) return; ensureAudio(); toggleShop(true); }]);
   defs.push(['homeSign', '📅 签到', () => { if(!homeOpen() || loadingStart) return; ensureAudio(); uiScreen = 'sign'; }]);
@@ -2988,7 +3008,7 @@ function uiDrawHome(){
     save.daily.tasks.forEach((t, i) => {
       const ly = ty0 + tPad + tLineH * (i + 1.5);
       const col = t.done ? '#7fd89a' : '#c5cede';
-      dText(fitText((t.done ? '✅ ' : '◻ ') + taskName(t), tw - tPad * 2 - cw * 0.045, fs(0.03)), tx0 + tPad, ly, fs(0.03), col, 'left');
+      dText(fitText((t.done ? '✅ ' : '⬜ ') + taskName(t), tw - tPad * 2 - cw * 0.045, fs(0.03)), tx0 + tPad, ly, fs(0.03), col, 'left');
       dText(Math.min(t.prog, t.goal) + '/' + t.goal, tx0 + tw - tPad, ly, fs(0.03), col, 'right');
     });
   }
@@ -3018,7 +3038,7 @@ function uiDrawHome(){
     const canS = pendingShield || save.coins >= 60;
     uiBtn({ id: 'boost-shield', x: bx0 + bPad, y: byy, w: bw2 - bPad * 2, h: bBtnH,
       label: errOn('shield') ? '金币不够！'
-           : '🛡 开局护盾 · ' + (canS ? '60💰' : '还差' + (60 - save.coins) + '💰'),
+           : '🛡️ 开局护盾 · ' + (canS ? '60💰' : '还差' + (60 - save.coins) + '💰'),
       size: fs(0.03), bg: pendingShield ? '#ffd34d' : 'rgba(255,255,255,0.08)', fg: pendingShield ? '#4a3500' : '#dfe6f5',
       stroke: pendingShield ? '#ffd34d' : 'rgba(255,255,255,0.2)', bold: pendingShield, alpha: canS ? 1 : 0.55,
       cb: () => boostClick('shield') });
@@ -3047,7 +3067,7 @@ function shopRows(){
         rows.push({ prev: { kind: 'char', v: g.id }, title: ch2.name, chips: chips, desc: ch2.desc, btns: [btn] });
       } else {
         const full = save.durLevel >= g.prices.length;
-        rows.push({ prev: { kind: 'emoji', v: '⏱️' }, title: g.name, desc: g.desc,
+        rows.push({ prev: { kind: 'emoji', v: '⏰' }, title: g.name, desc: g.desc,
           note: 'Lv ' + save.durLevel + '/' + g.prices.length,
           btns: [ full ? { id: 'shopUp-dur', label: '已满级', disabled: true }
                        : { id: 'shopUp-dur', label: shopErrText('up-dur') || '升级 ' + g.prices[save.durLevel] + ' 金币',
@@ -3085,7 +3105,7 @@ function shopRows(){
         const owned = (save.skins[cid] || []).includes(sk.id);
         const on = save.skinOn[cid] === sk.id;
         btns.push(owned
-          ? { id: 'shopSkinWear-' + cid + '-' + sk.id, label: on ? sk.name + ' ✓' : '穿' + sk.name,
+          ? { id: 'shopSkinWear-' + cid + '-' + sk.id, label: on ? sk.name + ' ✅' : '穿' + sk.name,
               disabled: on, cb: () => skinWear(cid, sk.id) }
           : { id: 'shopSkinBuy-' + cid + '-' + sk.id, label: shopErrText('skin-' + cid + '-' + sk.id) || sk.name + ' ' + sk.price + '💎',
               cant: save.gems < sk.price, cb: () => skinBuy(cid, sk.id) });
@@ -3257,7 +3277,7 @@ function uiDrawSign(){
     const tcol = i === todayIdx ? '#fff' : (got ? '#ffd34d' : '#aab6d0');
     dText('第' + (i + 1) + '天', cx3 + cellW / 2, gy + cellH * 0.24, fs(0.026), tcol, 'center');
     dText(SIGN_REWARDS[i], cx3 + cellW / 2, gy + cellH * 0.52, fs(0.026), tcol, 'center');
-    if(got) dText('✓', cx3 + cellW / 2, gy + cellH * 0.8, fs(0.03), tcol, 'center', true);
+    if(got) dText('✅', cx3 + cellW / 2, gy + cellH * 0.8, fs(0.03), tcol, 'center', true);
   }
   // 领取按钮：今天没领过才亮
   const claimY = gy + cellH + pad;
@@ -3490,6 +3510,7 @@ const UI = {
   drawDead: uiDrawDead,
   drawAvatarAsk: uiDrawAvatarAsk,
   drawGameBtns: uiDrawGameBtns,
+  drawPauseMenu: uiDrawPauseMenu,
 };
 
 /* —— 微信分享：转发卡片就是挑战书（替代网页版的 updateShareUrl 改地址栏） —— */
@@ -3535,6 +3556,7 @@ function frame(t){
   if(homeOpen()){ drawHomeScene(); blitHome(); UI.drawHome(); }   // 【小游戏改造】像素场景铺满屏，再画大厅按钮
   if(game.state === 'playing' && uiScreen === 'none' && !loadingStart){
     UI.drawGameBtns();   // 【小游戏改造】游戏中右上角的 暂停/静音 悬浮按钮
+    if(paused && !resumeUntil) UI.drawPauseMenu();   // 暂停页：继续(点屏幕) + 回主页
   }
   // 死亡结算：死后 0.6 秒结算卡才浮上来，先看清自己怎么死的（复活按钮的条件在 drawDead 里现算）
   const showDead = game.state === 'dead' && bgTime - game.deadAt > 0.6 && !shopOpen();
