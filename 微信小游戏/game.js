@@ -39,6 +39,9 @@ const lctx = loadCv.getContext('2d');
 // 游戏世界(900×300) → 手机屏幕 的等比缩放，多出来的上下空间是深色舞台边
 let DPR = sysInfo.pixelRatio || 1;   // 【小游戏改造】设备像素比：UI 层的坐标都用"设备像素"
 const VIEW = { s: 1, ox: 0, oy: 0 };
+const SAFE = { l: 0, r: 0 };   // 【小游戏改造】刘海/圆角占掉的不可用边（设备像素）
+let CAPSULE = null;            // 微信右上角胶囊按钮（"···◎"）的位置，永远盖在游戏上面
+let hudInsetL = 0;             // 记分牌要右移多少（游戏坐标）才能躲开刘海
 function resize(){
   sysInfo = readWindowInfo();   // 【小游戏改造】旋转/折叠屏后宽高会变，每次重新取
   DPR = sysInfo.pixelRatio || 1;
@@ -48,6 +51,12 @@ function resize(){
   VIEW.ox = (canvas.width  - W * VIEW.s) / 2;
   VIEW.oy = (canvas.height - H * VIEW.s) / 2;
   ctx.setTransform(VIEW.s, 0, 0, VIEW.s, VIEW.ox, VIEW.oy);
+  // 【小游戏改造】iPhone 刘海屏：系统会告诉我们哪块是"安全区域"，记分牌往里挪
+  const sa = sysInfo.safeArea;
+  SAFE.l = sa ? Math.max(0, sa.left) * DPR : 0;
+  SAFE.r = sa ? Math.max(0, sysInfo.windowWidth - sa.right) * DPR : 0;
+  try{ if(wx.getMenuButtonBoundingClientRect) CAPSULE = wx.getMenuButtonBoundingClientRect(); }catch(e){}
+  hudInsetL = Math.max(0, (SAFE.l - VIEW.ox) / VIEW.s);
 }
 resize();
 // 屏幕旋转/窗口变化时跟着重新铺画布（真机横竖屏切换、开发者工具点旋转按钮都走这里）
@@ -2299,6 +2308,7 @@ function drawParticles(){
 function drawHUD(){
   if(game.state === 'ready' && homeOpen()) return;   // 大厅开着时不画 HUD：一屏一焦点
   ctx.save();
+  ctx.translate(hudInsetL, 0);   // 【小游戏改造】整块记分牌右移，躲开 iPhone 刘海
   ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 4;
   ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
   // 亮色天空上白字看不清：HUD 文字一律先描边再填色
@@ -2357,6 +2367,7 @@ function drawHUD(){
   // 最高分画在顶部正中：右上角的按钮是 HTML 元素，窗口变窄时会盖住右对齐的文字
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 17px ' + FONT;
+  ctx.translate(-hudInsetL, 0);   // 【小游戏改造】下面是屏幕正中的文字，挪回真正的中心
   ctx.textAlign = 'center';
   hudText(dailyMode ? '☀️ ' + Math.min(3000, Math.floor(game.runDist / 12)) + ' / 3000 米'
                     : '最高 ' + game.best, W / 2, 14);
@@ -3368,8 +3379,15 @@ function uiDrawGameBtns(){
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   const cw = canvas.width, ch = canvas.height;
   const s = ch * 0.088, m = ch * 0.028, gap = ch * 0.018;
-  const yB = m;
-  const xMute = cw - m - s, xPause = xMute - gap - s;
+  // 【小游戏改造】微信的"···◎"胶囊永远压在右上角，咱们的按钮摆到它正下方
+  let yB = m, xEdge = cw - m;
+  if(CAPSULE && CAPSULE.bottom){
+    yB = CAPSULE.bottom * DPR + ch * 0.02;
+    xEdge = CAPSULE.right * DPR;
+  } else if(SAFE.r > 0){
+    xEdge = cw - SAFE.r - m;
+  }
+  const xMute = xEdge - s, xPause = xMute - gap - s;
   ctx.fillStyle = 'rgba(255,255,255,0.18)';
   dRR(xPause, yB, s, s, s * 0.22); ctx.fill();
   dRR(xMute,  yB, s, s, s * 0.22); ctx.fill();
