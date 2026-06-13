@@ -386,6 +386,7 @@ function loadSave(){
                 mount: false, pet: false, board: false, moth: false,
                 petOwned: ['star'], petActive: 'star',   // 【酷跑2】萌宠：已拥有列表 / 当前出战（默认就送星宝）
                 talents: {},   // 【酷跑2】天赋养成树：每个天赋 id → 已升等级（金币永久升级，越肝越强）
+                stageMax: 1, stageProg: {},   // 【酷跑2】闯关：已解锁到第几关(默认只开第1关) / 每关历史最高星数 {关卡id: 星}
                 runs: 0, pitsSeen: 0, barSeen: false, freeReviveUsed: false, nick: '',
                 lastLogin: '', streak: 0, daily: null, dailyRun: null,
                 bestDist: 0, lastBeat: '', skins: {}, skinOn: {},
@@ -419,6 +420,9 @@ function loadSave(){
       if(out.petActive !== null && !out.petOwned.includes(out.petActive)) out.petActive = out.petOwned[0];   // 出战的得是拥有的
       // 【酷跑2】天赋存档兜底：老存档没有 talents 字段（或被写坏成非对象），统一补成空对象，老档不崩
       if(!out.talents || typeof out.talents !== 'object') out.talents = {};
+      // 【酷跑2】闯关存档兜底：老存档没有 stageMax/stageProg，补默认（至少解锁第 1 关），老档不崩
+      if(typeof out.stageMax !== 'number' || out.stageMax < 1) out.stageMax = 1;
+      if(!out.stageProg || typeof out.stageProg !== 'object') out.stageProg = {};
       return out;
     }
   }catch(e){}
@@ -542,6 +546,37 @@ function showBanner(text, dur, color){
 let challenge = null;        // 从挑战链接进来的对战目标 {score, name}
 let dailyMode = false;       // 是否在"今日挑战"模式（全国同一天同一张图）
 let recordFlagShown = false; // 本局"接近纪录旗"横幅是否已播
+
+/* —— 【酷跑2】闯关冒险模式：对标天天酷跑"冒险模式"——一关一关打，有终点、有三星目标 ——
+ *   adventureMode：是否在闯关；curStage：当前关卡数据；本关进度三件套——
+ *   stageStars=本关已评几星 / stageHurt=本关是否受过伤（撞障碍/掉血即 true，3星之"不受伤"判据）
+ *   stageCoins=本关已收集金币数（3星之"集够金币"判据）。
+ *   STAGES：12 关，难度递增——dist(终点米数) 从 300 渐增到 3000+，goalCoins(三星之一所需金币) 同步递增。
+ *   闯关用"关卡 id 当随机种子"→ 同一关每次同图，可背板（和日赛走同一套 seededRng）。*/
+let adventureMode = false;   // 是否在闯关冒险模式（无尽/日赛之外的第三模式）
+let curStage = null;         // 当前关卡对象（来自 STAGES），非闯关时为 null
+let stageStars = 0;          // 本关结算评定的星数（finishStage 里算）
+let stageHurt = false;       // 本关是否受过伤（撞障碍/掉坑/扣血会置 true → 失去"不受伤"星）
+let stageCoins = 0;          // 本关已收集金币数（达到 goalCoins → 得"收集"星）
+const STAGES = [
+  { id: 1,  name: '草原起跑',   dist: 300,  goalCoins: 8,   reward: { coins: 120,  gems: 0 },  biome: 0 },
+  { id: 2,  name: '丛林初探',   dist: 450,  goalCoins: 12,  reward: { coins: 160,  gems: 0 },  biome: 1 },
+  { id: 3,  name: '沙海跋涉',   dist: 600,  goalCoins: 16,  reward: { coins: 200,  gems: 1 },  biome: 2 },
+  { id: 4,  name: '雪原疾行',   dist: 800,  goalCoins: 22,  reward: { coins: 260,  gems: 0 },  biome: 3 },
+  { id: 5,  name: '黄昏古道',   dist: 1000, goalCoins: 28,  reward: { coins: 320,  gems: 1 },  biome: 4 },
+  { id: 6,  name: '溶洞探秘',   dist: 1300, goalCoins: 36,  reward: { coins: 400,  gems: 0 },  biome: 5 },
+  { id: 7,  name: '花海狂奔',   dist: 1600, goalCoins: 44,  reward: { coins: 480,  gems: 1 },  biome: 6 },
+  { id: 8,  name: '云端天路',   dist: 1900, goalCoins: 54,  reward: { coins: 600,  gems: 2 },  biome: 7 },
+  { id: 9,  name: '熔岩险境',   dist: 2200, goalCoins: 64,  reward: { coins: 720,  gems: 1 },  biome: 8 },
+  { id: 10, name: '星夜飞驰',   dist: 2500, goalCoins: 76,  reward: { coins: 880,  gems: 2 },  biome: 9 },
+  // 通关大奖：第 11 关送一只钻石角色（雪狐飘飘），第 12 关送传说龙
+  { id: 11, name: '极速峡谷',   dist: 2800, goalCoins: 88,  reward: { coins: 1000, gems: 2, char: 'snowfox' } },
+  { id: 12, name: '终极冲刺',   dist: 3200, goalCoins: 100, reward: { coins: 1500, gems: 3, char: 'dragon' } },
+];
+function curStageBiome(){ return (curStage && typeof curStage.biome === 'number') ? curStage.biome : 0; }   // 没指定就用草原
+// 【酷跑2】"纯无尽局专属"判据：既不是日赛也不是闯关。Boss/流星雨/钻石兔/奖励关/破纪录横幅等只在纯无尽出现，
+//   闯关有自己的终点与三星节奏，和日赛一样把这些大事件关掉（保证同图、关卡时长可控）。
+function endlessOnly(){ return !dailyMode && !adventureMode; }
 function todayStr(){ return new Date().toDateString(); }
 function dateNum(){ const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); }
 // mulberry32：可指定种子的伪随机数生成器——同一个种子永远吐出同一串随机数
@@ -563,21 +598,25 @@ function dashMult(){
 // 【内容扩展】分数狂潮：生效期间所有"加分来源"统一乘 3（撞碎/吃金币额外分/里程都过这个口子）
 function scoreMult(){ return bgTime < scorex3Until ? 3 : 1; }
 let seededRng = Math.random;
-function srand(){ return dailyMode ? seededRng() : Math.random(); }   // 生成赛道内容专用的随机数
+// 【酷跑2】闯关也走种子：每关固定种子=关卡 id，保证同一关每次都是同一张图，可背板（与日赛同套机制）
+function srand(){ return (dailyMode || adventureMode) ? seededRng() : Math.random(); }   // 生成赛道内容专用的随机数
 function srange(a, b){ return a + srand() * (b - a); }
 
 // 【内容扩展】开局生成本局"视觉世界出场顺序"：把全部世界下标打乱排成一队。
 //   用 srand → 日赛(dailyMode)走日期种子，当天全国同一串世界顺序，普通局每局随机。
 //   首段固定从 0 号草原开场（新手第一眼是熟悉的草原，跑出 1200 米才进第一个新世界）。
 function buildWorldSeq(){
+  // 【酷跑2】闯关：每关用自己指定的 biome 打头（给每关一个专属世界外观），其余世界随种子洗牌跟在后面。
+  //   非闯关：和原来一样固定从 0 号草原开场。
+  const lead = (adventureMode && curStage) ? (curStageBiome() % WORLD_THEMES.length) : 0;
   const rest = [];
-  for(let i = 1; i < WORLD_THEMES.length; i++) rest.push(i);   // 1..n（草原 0 单独打头）
-  // Fisher–Yates 洗牌，随机源用 srand（日赛=固定种子）
+  for(let i = 0; i < WORLD_THEMES.length; i++){ if(i !== lead) rest.push(i); }
+  // Fisher–Yates 洗牌，随机源用 srand（日赛/闯关=固定种子）
   for(let i = rest.length - 1; i > 0; i--){
     const j = Math.floor(srand() * (i + 1));
     const t = rest[i]; rest[i] = rest[j]; rest[j] = t;
   }
-  worldSeq = [0].concat(rest);
+  worldSeq = [lead].concat(rest);
   curWorldName = '';   // 重置"上一个世界名"，开局第一段不抢着弹横幅
 }
 
@@ -926,7 +965,7 @@ function pressJump(source){
   }
   if(game.state === 'dead'){
     // 结算卡片上有显式按钮；点屏幕重开只兜底（无复活资格 + 1.2 秒防误触）
-    const canRevive = !dailyMode && (!save.freeReviveUsed || save.coins >= reviveCost());   // 【酷跑2】用带重生天赋折扣的价
+    const canRevive = endlessOnly() && (!save.freeReviveUsed || save.coins >= reviveCost());   // 【酷跑2】闯关同日赛不复活（失败即重试），用带重生天赋折扣的价
     if(!canRevive && bgTime - game.deadAt > 1.2) startGame();
     return;
   }
@@ -977,6 +1016,8 @@ function startSlide(){
 /* ========== 8. 开始 / 死亡 / 重开 ========== */
 function startGame(){
   if(dailyMode) seededRng = mulberry32(dateNum());   // 日赛每次重试都从头放同一串随机数
+  // 【酷跑2】闯关每关固定种子=关卡 id，每次重试同图可背板（startStage 已设 adventureMode/curStage，这里只播种子）
+  else if(adventureMode && curStage) seededRng = mulberry32((curStage.id * 2654435761) >>> 0);
   save.runs = (save.runs || 0) + 1;
   addStat('runs', 1);                          // 【留存包】③ 累计局数
   combo = 0; comboBest = 0; feverUntil = 0;    // 【留存包】① 新一局连击从零攒
@@ -1008,6 +1049,8 @@ function startGame(){
   banner.until = 0; petPulseAt = 0; petPulseUntil = 0;
   petSmashAt = bgTime + 6; petSmashFx = 0; petReviveUsed = false;   // 【酷跑2】萌宠局内计时器清零（铁拳熊首撞给 6 秒、不死鸟本局未用）
   recordFlagShown = false; curBgmTier = 0;
+  // 【酷跑2】闯关本关进度清零：每次开关/重试都从零评星（stars 在 finishStage 现算，这里先归零）
+  if(adventureMode){ stageStars = 0; stageHurt = false; stageCoins = 0; }
   buildWorldSeq();   // 【内容扩展】抽好本局世界出场顺序（日赛已在上方播好种子→当天同图）
   bgmVariant = Math.random() < 0.5 ? 0 : 1;   // 【音乐多样化】开局抽签：这一局听曲A还是曲B（整局固定，不每帧乱换）
   bgm.step = 0; bgm.track = null;             // 新一局旋律从头唱
@@ -1045,7 +1088,10 @@ function die(cause){
   sfx.die();
   burst(player.x + player.w/2, Math.min(player.y - player.h/2, H - 20), 26, ['#ff9b4b','#ffd34d','#ffffff']);
   taskProg('meters', 0, Math.floor(game.runDist / 12));   // "单局跑X米"任务在结算时结算
-  if(dailyMode){
+  if(adventureMode){
+    // 【酷跑2】闯关失败：撞死/掉坑都算受伤、不刷新无尽纪录、不结挑战赏（参考日赛禁用面）。本关不解锁，可重试。
+    stageHurt = true;
+  } else if(dailyMode){
     recordDailyRun();
   } else {
     // 和"本局开始时的纪录"比，而不是和实时刷新的 best 比（best 永远 >= score，那样永远判不出新纪录）
@@ -1081,6 +1127,36 @@ function finishDaily(){
   updateDeadCard();
   showBanner('🏁 完赛！', 2, '#ffd34d');
 }
+// 【酷跑2】闯关跑到终点：过关结算——算三星、发奖励、记进度、解锁下一关
+function finishStage(){
+  const st = curStage;
+  game.state = 'dead';
+  game.deathBy = 'finish';   // 复用完赛分支（不算死亡：不刷新无尽纪录、不结挑战）
+  game.deadAt = bgTime;
+  stopBGM();
+  sfx.power();
+  taskProg('meters', 0, Math.floor(game.runDist / 12));
+  endRunStats(false);        // 完赛不算"死亡"，但里程/连击/礼包/成就照常结算
+  // —— 三星评定：1★=完赛(到这就有) / 2★=本关全程不受伤 / 3★=收集够 goalCoins ——
+  const noHurt = !stageHurt;
+  const coinsEnough = stageCoins >= st.goalCoins;
+  stageStars = 1 + (noHurt ? 1 : 0) + (coinsEnough ? 1 : 0);
+  // —— 发奖励：仅当首次通关 或 刷新了更高星数才发（避免刷关无限领钱）——
+  const prev = (save.stageProg && save.stageProg[st.id]) || 0;
+  if(stageStars > prev){
+    const rw = st.reward || {};
+    if(rw.coins){ save.coins += rw.coins; addStat('coins', rw.coins); }
+    if(rw.gems){ save.gems = (save.gems || 0) + rw.gems; }
+    if(rw.char && !save.chars.includes(rw.char)){ save.chars.push(rw.char); }   // 通关大奖：解锁角色（已有则跳过）
+  }
+  // 进度只升不降；解锁下一关
+  save.stageProg = save.stageProg || {};
+  save.stageProg[st.id] = Math.max(prev, stageStars);
+  save.stageMax = Math.max(save.stageMax || 1, st.id + 1);
+  saveSave();
+  updateDeadCard();
+  showBanner('🏁 过关！' + '★'.repeat(stageStars), 2.2, '#ffd34d');
+}
 // 【血条Boss】撞到障碍：扣血（不再只扣分）——扣 22 血、震屏、短暂无敌闪烁；血空才真正死
 function stumble(){
   if(shieldOn){   // 护盾替你挡下这一击！（挡下不掉血）
@@ -1091,6 +1167,7 @@ function stumble(){
     floatText(player.x + player.w / 2, player.y - player.h - 16, '护盾抵挡！', '#8ecaff');
     return;
   }
+  if(adventureMode) stageHurt = true;   // 【酷跑2】闯关：真正掉血即"受伤"（护盾挡下的上面已 return，不算）→ 失去"不受伤"三星
   playerHP -= 22;         // 【血条Boss】每次撞击扣 22 血，约 4-5 次撞死（脱战/吃币能回一点缓冲）
   lastHurtAt = bgTime;    // 【血条Boss】记下受伤时刻——脱战 2 秒后才回血
   invulnUntil = bgTime + 1.0;
@@ -1866,10 +1943,12 @@ function update(dt){
 
   // 今日挑战：固定 3000 米，跑完即完赛
   if(dailyMode && game.runDist / 12 >= 3000){ finishDaily(); return; }
+  // 【酷跑2】闯关：跑到本关终点米数即过关结算（到达即成功，至少 1 星）
+  if(adventureMode && curStage && game.runDist / 12 >= curStage.dist){ finishStage(); return; }
 
   // 【血条Boss】Boss 触发：非日赛 / 非奖励关 / 本局没在打也没打过 / 分数过线 → 进入 Boss 战
   //   日赛禁用（保证同图公平，和流星雨/钻石兔同款门控）。奖励关结束后才触发，避免画面太乱
-  if(!dailyMode && !inBonus && !boss && !bossDefeated && game.score >= BOSS_SCORE){
+  if(endlessOnly() && !inBonus && !boss && !bossDefeated && game.score >= BOSS_SCORE){   // 【酷跑2】闯关也不触发 Boss
     startBoss();
   }
   // 【血条Boss】Boss 战进行中：驱动盘旋/攻击/扣血/见底判定（独立函数，便于阅读）
@@ -2108,7 +2187,7 @@ function update(dt){
   }
 
   // 💫 流星雨：5000 米后的专属事件（日赛不触发，保证同图；【血条Boss】Boss 战里也不触发）
-  if(!dailyMode && !inBonus && !bossMode && game.runDist / 12 >= nextMeteorAt){
+  if(endlessOnly() && !inBonus && !bossMode && game.runDist / 12 >= nextMeteorAt){   // 【酷跑2】闯关不下流星雨（同图可背板）
     nextMeteorAt = game.runDist / 12 + 800 + Math.random() * 400;
     showBanner('💫 流星雨来袭！盯住地上的阴影', 2.2, '#ff8a5c');
     for(let i = 0; i < 5; i++){   // 【真机反馈】3 颗太冷清，5 颗才像"雨"
@@ -2118,7 +2197,7 @@ function update(dt){
   }
 
   // 钻石兔：神出鬼没，追上摸到它就 +1 💎（日赛里不出，保证公平；【血条Boss】Boss 战里也不出）
-  if(!inBonus && !bunny && !dailyMode && !bossMode){
+  if(!inBonus && !bunny && endlessOnly() && !bossMode){   // 【酷跑2】闯关不出钻石兔（保证同图公平）
     distToBunny -= move;
     if(distToBunny <= 0){
       bunny = { x: W + 60, mode: 'in', t: 0, base: 0 };
@@ -2258,6 +2337,7 @@ function update(dt){
       v = Math.round(v * talentVal('coin'));       // 【酷跑2】天赋·财源：金币价值 ×(1+0.06*等级)，取整（日赛 talentVal=1 → 不变）
       game.coinCount += v;
       save.coins += v;
+      if(adventureMode) stageCoins += v;   // 【酷跑2】闯关：累计本关收集的金币数（达到 goalCoins → 三星之"收集"星）
       playerHP = Math.min(effMaxHP(), playerHP + 1);   // 【血条Boss】吃币微回 1 血，奖励收集（【酷跑2】上限随铁骨天赋）
       // 【内容扩展】分数狂潮：金币"得分"×3，但金币"数量(coinCount/save.coins)"绝不翻倍——
       //   金币本身在分数公式里按 coinCount*5 计，这里只把多出来的 (×3-1) 份分数补进 bonus
@@ -2270,8 +2350,8 @@ function update(dt){
       sfx.coin();
       burst(c.x, c.y, 6, ['#ffd34d', '#fff3b0']);
       floatText(c.x, c.y - 14, '+' + (cScore * scoreMult()) + '分', '#ffd34d');
-      // 本局攒够金币就进超级奖励关！（进行中不重复触发；日赛里没有奖励关，保证赛道一致）
-      if(!dailyMode && bgTime >= bonusUntil && game.coinCount >= nextBonusAt) startBonus();
+      // 本局攒够金币就进超级奖励关！（进行中不重复触发；日赛/闯关里没有奖励关，保证赛道一致）
+      if(endlessOnly() && bgTime >= bonusUntil && game.coinCount >= nextBonusAt) startBonus();
     }
   }
 
@@ -2293,7 +2373,7 @@ function update(dt){
     sfx.power();
   }
   // 破纪录的那一瞬间：金色横幅 + 撒花！（日赛分数独立计算，不影响无尽纪录）
-  if(!dailyMode && !game.recordShown && game.startBest > 0 && game.score > game.startBest){
+  if(endlessOnly() && !game.recordShown && game.startBest > 0 && game.score > game.startBest){   // 【酷跑2】闯关不弹破纪录
     game.recordShown = true;
     showBanner('🎉 新纪录诞生！', 2.2, '#ffd34d');
     burst(player.x + player.w / 2, player.y - player.h - 10, 20, ['#ffd34d', '#ffffff', '#ff9b4b']);
@@ -2301,7 +2381,7 @@ function update(dt){
     sfx.power();
   }
   // 挑战链接：超过朋友分数的那一刻
-  if(!dailyMode && challenge && save.lastBeat !== challenge.name && game.score > challenge.score){
+  if(endlessOnly() && challenge && save.lastBeat !== challenge.name && game.score > challenge.score){   // 【酷跑2】闯关不结挑战赏
     save.lastBeat = challenge.name;
     save.coins += 100;
     saveSave();
@@ -2309,12 +2389,12 @@ function update(dt){
     sfx.power();
   }
   // 纪录旗快到了：提示一次
-  if(!dailyMode && !recordFlagShown && save.bestDist > 1000 &&
-     save.bestDist - game.runDist < 1200 && save.bestDist - game.runDist > 0){
+  if(endlessOnly() && !recordFlagShown && save.bestDist > 1000 &&
+     save.bestDist - game.runDist < 1200 && save.bestDist - game.runDist > 0){   // 【酷跑2】闯关不提示纪录旗
     recordFlagShown = true;
     showBanner('🚩 前方就是你的最远纪录！', 1.8, '#ffd34d');
   }
-  if(!dailyMode && game.score > game.best) game.best = game.score;   // 积分制：最高纪录实时刷新
+  if(endlessOnly() && game.score > game.best) game.best = game.score;   // 积分制：最高纪录实时刷新（闯关不刷无尽纪录）
 }
 
 // 【酷跑1】结束下滑：恢复正常身高、清掉滑行标记（站起来）
@@ -2654,7 +2734,7 @@ function drawPits(){
     }
   }
   // 纪录旗：上次破纪录跑到的位置，插一面小金旗（追过它就是新纪录的节奏！）
-  if(!dailyMode && game.state === 'playing' && save.bestDist > 1000){
+  if(endlessOnly() && game.state === 'playing' && save.bestDist > 1000){   // 【酷跑2】闯关赛道不画无尽纪录旗
     const fx = player.x + (save.bestDist - game.runDist);
     if(fx > -30 && fx < W + 30){
       ctx.strokeStyle = '#d9a420'; ctx.lineWidth = 3;
@@ -3715,15 +3795,42 @@ function drawHUD(){
   ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
   // 亮色天空上白字看不清：HUD 文字一律先描边再填色
   const hudText = (s, x, y) => { ctx.strokeText(s, x, y); ctx.fillText(s, x, y); };
+  // 【UI优化】左上角 HUD 半透明底板：把得分/血条/道具条和背后的角色"分层"——
+  //   角色跑过去只是在板子后面（半透明能看见），不会再和文字糊成一团；亮天空上文字也清楚
+  {
+    let nBars = 0;
+    if(power.type) nBars++;
+    if(bgTime < magnetUntil) nBars++;
+    if(bgTime < coinx2Until) nBars++;
+    if(bgTime < slowUntil) nBars++;
+    if(bgTime < shrinkUntil) nBars++;
+    if(bgTime < ghostUntil) nBars++;
+    if(bgTime < scorex3Until) nBars++;
+    const showHook = game.state === 'playing' && endlessOnly() && bgTime >= bonusUntil && nextBonusAt - game.coinCount <= 10;
+    let panelBot = 94;                              // 默认盖到血条下方
+    if(showHook) panelBot = 112;
+    if(nBars > 0) panelBot = 114 + nBars * 15;
+    ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(8,12,24,0.40)';          // 深蓝半透明，60% 能看见后面的角色
+    dRR(6, 4, 202, panelBot - 4, 12); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1;
+    dRR(6, 4, 202, panelBot - 4, 12); ctx.stroke();
+    ctx.restore();
+  }
   // —— 左上角：表现面板（大号分数 + 离目标还差多少） ——
-  const breaking = !dailyMode && game.startBest > 0 && game.score > game.startBest && game.state !== 'ready';
+  const breaking = endlessOnly() && game.startBest > 0 && game.score > game.startBest && game.state !== 'ready';   // 【酷跑2】闯关不显示破纪录金光
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.fillStyle = breaking ? '#ffd34d' : '#fff';   // 破纪录时分数变金色
   ctx.font = 'bold 24px ' + FONT;
   hudText('得分 ' + game.score, 16, 10);
   ctx.font = 'bold 13px ' + FONT;
   let subLine, subColor;
-  if(dailyMode){
+  if(adventureMode && curStage){
+    // 【酷跑2】闯关 HUD：左上副行报"金币进度 + 不受伤状态"（终点距离放在屏幕正中那行，避免叠字）
+    subLine = '💰 ' + stageCoins + '/' + curStage.goalCoins + ' · ' + (stageHurt ? '受伤✗' : '不受伤✓');
+    subColor = stageHurt ? '#ff8aa0' : '#7fd89a';
+  } else if(dailyMode){
     const drB = (save.dailyRun && save.dailyRun.date === todayStr()) ? save.dailyRun.best : 0;
     subLine = '🌞 今日挑战 · 今日最佳 ' + drB + ' 分'; subColor = '#ffd34d';
   } else if(breaking){
@@ -3763,7 +3870,7 @@ function drawHUD(){
     hudText('❤ ' + Math.ceil(playerHP), hbX + hbW + 6, hbY - 1);   // ❤ 图标 + 当前血量数字
   }
   // 奖励关倒计时钩子：就快攒够了！（血条占了 78，往下挪到 96）
-  if(game.state === 'playing' && !dailyMode && bgTime >= bonusUntil && nextBonusAt - game.coinCount <= 10){
+  if(game.state === 'playing' && endlessOnly() && bgTime >= bonusUntil && nextBonusAt - game.coinCount <= 10){   // 【酷跑2】闯关无奖励关，不提示
     ctx.font = 'bold 12px ' + FONT;
     ctx.fillStyle = '#ffd34d';
     hudText('再吃 ' + Math.max(1, nextBonusAt - game.coinCount) + ' 枚 → ✨奖励关', 16, 96);
@@ -3796,8 +3903,13 @@ function drawHUD(){
   ctx.font = 'bold 17px ' + FONT;
   ctx.translate(-hudInsetL, 0);   // 【小游戏改造】下面是屏幕正中的文字，挪回真正的中心
   ctx.textAlign = 'center';
-  hudText(dailyMode ? '🌞 ' + Math.min(3000, Math.floor(game.runDist / 12)) + ' / 3000 米'
-                    : '最高 ' + game.best, W / 2, 14);
+  // 【酷跑2】闯关：正中显示"第X关 · 还剩Ym到终点"（取代"最高/日赛米数"那行，不另占位置）
+  hudText(
+    adventureMode && curStage
+      ? '🗺️ 第' + curStage.id + '关 · 还剩 ' + Math.max(0, curStage.dist - Math.floor(game.runDist / 12)) + ' 米'
+      : (dailyMode ? '🌞 ' + Math.min(3000, Math.floor(game.runDist / 12)) + ' / 3000 米'
+                   : '最高 ' + game.best),
+    W / 2, 14);
   if(boostDist > 0 && game.runDist < boostDist && game.state === 'playing'){
     ctx.font = 'bold 16px ' + FONT;
     ctx.fillStyle = '#ffd34d';
@@ -3897,6 +4009,32 @@ function drawOverlay(){
   }
 }
 
+// 【酷跑2】闯关终点门：随着接近终点从右侧驶入。门 x = 玩家位置 + 还差的距离(像素=米×12)。
+//   画一道带"🏁 终点"牌子的拱门，跑到门处即触发 finishStage（update 里按米数判定，这里只负责画）。
+function drawFinish(){
+  if(!adventureMode || !curStage || game.state !== 'playing') return;
+  const remainPx = curStage.dist * 12 - game.runDist;   // 离终点还有多少像素
+  const gx = player.x + remainPx;                         // 终点门在屏幕上的 x
+  if(gx < -40 || gx > W + 120) return;                    // 还没驶入屏幕 / 已驶过，就不画
+  const topY = 40, postW = 10;
+  // 左右两根门柱（黑黄相间的赛道警示色）
+  for(const px of [gx - 26, gx + 26 - postW]){
+    ctx.fillStyle = '#2b2f3a';
+    ctx.fillRect(px, topY, postW, GROUND_Y - topY);
+    ctx.fillStyle = '#ffd34d';
+    for(let yy = topY; yy < GROUND_Y; yy += 24){ ctx.fillRect(px, yy, postW, 12); }
+  }
+  // 顶部横梁 + 旗牌
+  ctx.fillStyle = '#2b2f3a';
+  ctx.fillRect(gx - 30, topY - 4, 60, 14);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 16px ' + FONT;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+  ctx.strokeText('🏁 终点', gx, topY - 16);
+  ctx.fillText('🏁 终点', gx, topY - 16);
+}
+
 /* ========== 14. 渲染一帧 ========== */
 function render(){
   ctx.clearRect(0, 0, W, H);
@@ -3925,6 +4063,7 @@ function render(){
   }
   drawPits();
   drawObstacles();
+  drawFinish();   // 【酷跑2】闯关终点门：画在障碍层之上、角色之下，随距离从右驶入
   if(boss) drawBoss();   // 【血条Boss】Boss 与其弹幕画在障碍之后、金币/角色之前
   if(bunny) drawBunny();
   drawCoins();   // 金币画在障碍之后（也就是上层），万一和障碍重叠也看得见
@@ -4451,6 +4590,7 @@ function openRank(){
 }
 function closeRank(){ uiScreen = homeOpen() ? 'home' : 'none'; }
 function closeAch(){ uiScreen = homeOpen() ? 'home' : 'none'; }
+function closeAdv(){ uiScreen = homeOpen() ? 'home' : 'none'; }   // 【酷跑2】关闭闯关选关页
 function weekBestNow(){   // 【留存包】⑥ 本周最高分（存档里若还是上周的记录就按 0 算：跨周段位从头打）
   return (save.week && save.week.key === weekKey()) ? (save.week.best || 0) : 0;
 }
@@ -4462,11 +4602,26 @@ function adReady(){ return false; }   // 目前没有广告位：永远没准备
 /* —— 今日挑战 / 回主页 / 复制战绩（业务逻辑照抄网页版） —— */
 function startDaily(){
   dailyMode = true;
+  adventureMode = false; curStage = null;   // 【酷跑2】日赛与闯关互斥：开日赛先清掉闯关标记
   startGame();
   showBanner('🌞 今日挑战：全国同一张图，跑满 3000 米！', 2.8, '#ffd34d');
 }
+// 【酷跑2】开始一关闯关：和 startGame 同一套初始化，只是先立好 adventureMode/curStage 标记，
+//   startGame 会按 curStage.id 播种子（同关同图）、清零本关进度计数。
+function startStage(stageObj){
+  if(!stageObj) return;
+  dailyMode = false;            // 闯关不是日赛
+  adventureMode = true;
+  curStage = stageObj;
+  uiScreen = 'none'; uiHome = false;
+  startLoading(() => {
+    startGame();               // adventureMode/curStage 已立好 → startGame 走闯关分支
+    showBanner('🗺️ 第' + stageObj.id + '关 · ' + stageObj.name + ' · 跑到 ' + stageObj.dist + ' 米！', 2.6, '#ffd34d');
+  });
+}
 function goHome(){
   dailyMode = false;
+  adventureMode = false; curStage = null;   // 【酷跑2】回主页清掉闯关标记，下一局默认无尽
   game.state = 'ready';
   resetPlayer();
   uiHome = true; uiScreen = 'home';   // 【小游戏改造】原来是显示 #home 元素，现在拨界面状态机
@@ -4543,14 +4698,41 @@ function boostClick(kind){
 }
 
 /* —— 死亡结算卡的内容（数据照抄网页版 updateDeadCard，绘制在 drawDead） —— */
-const deadCard = { title: '', sub: '', score: '', stats: [], goal: null };
+const deadCard = { title: '', sub: '', score: '', stats: [], goal: null, adv: false, advWin: false, stars: 0 };
 function updateDeadCard(){
+  // 【酷跑2】闯关结算卡：通关(finish)/失败(撞死掉坑) 两种样式——★评价 + 奖励 + 三星明细
+  if(adventureMode && curStage){
+    const win = game.deathBy === 'finish';
+    deadCard.adv = true; deadCard.advWin = win; deadCard.stars = win ? stageStars : 0;
+    deadCard.goal = null;
+    if(win){
+      deadCard.title = '第' + curStage.id + '关 · ' + curStage.name;
+      deadCard.sub = stageStars >= 3 ? '🏆 完美三星！' : (stageStars === 2 ? '👍 两星，再加把劲！' : '过关！');
+      deadCard.score = '★'.repeat(stageStars) + '☆'.repeat(3 - stageStars);
+      deadCard.stats = [
+        '✅ 完赛　' + (stageHurt ? '❌ 不受伤' : '✅ 不受伤') +
+        '　' + (stageCoins >= curStage.goalCoins ? '✅' : '❌') + ' 金币 ' + stageCoins + '/' + curStage.goalCoins,
+      ];
+      const rw = curStage.reward || {};
+      const parts = [];
+      if(rw.coins) parts.push('+' + rw.coins + '💰'); if(rw.gems) parts.push('+' + rw.gems + '💎');
+      if(rw.char && CHARS[rw.char]) parts.push('解锁角色「' + CHARS[rw.char].name + '」');
+      if(parts.length) deadCard.stats.push('🎁 奖励：' + parts.join(' · '));
+    } else {
+      deadCard.title = '挑战失败';
+      deadCard.sub = game.deathBy === 'pit' ? '掉进坑里啦，看到坑要跳～' : '撞到障碍没血了，再试一次！';
+      deadCard.score = '第' + curStage.id + '关 · ' + curStage.name;
+      deadCard.stats = ['跑了 ' + Math.floor(game.runDist / 12) + ' / ' + curStage.dist + ' 米 · 金币 ' + stageCoins + '/' + curStage.goalCoins];
+    }
+    return;
+  }
+  deadCard.adv = false;
   const finish = dailyMode && game.deathBy === 'finish';
   deadCard.title = finish ? '🏁 完赛！' : '游戏结束';
-  const nearMiss = !dailyMode && !game.newBest && game.startBest > 0 && game.score >= game.startBest * 0.85;
+  const nearMiss = endlessOnly() && !game.newBest && game.startBest > 0 && game.score >= game.startBest * 0.85;
   deadCard.sub =
     nearMiss ? '就差 ' + (game.startBest - game.score + 1) + ' 分破纪录！' :
-    (game.newBest && !dailyMode ? '🎉 新纪录！' : (game.deathBy === 'pit' ? '掉进坑里啦，看到坑要跳～' : ''));
+    (game.newBest && endlessOnly() ? '🎉 新纪录！' : (game.deathBy === 'pit' ? '掉进坑里啦，看到坑要跳～' : ''));
   deadCard.score = game.score + ' 分';
   if(dailyMode){
     const dr = (save.dailyRun && save.dailyRun.date === todayStr()) ? save.dailyRun : { best: 0, tries: 0 };
@@ -4704,14 +4886,15 @@ function uiDrawHome(){
       ctx.strokeStyle = '#1d2433'; ctx.lineWidth = Math.max(1, ch * 0.004); ctx.stroke();
     }
   });
-  // 【留存包】挑战/商店/签到下面再开一排：好友榜 + 成就 +【酷跑2】天赋（同一套宽度体系，三个拼满开始按钮宽）
+  // 【留存包】挑战/商店/签到下面再开一排：闯关 + 好友榜 + 成就 +【酷跑2】天赋（同一套宽度体系，整排拼满开始按钮宽）
   const row2Y = rowY + rowH + bGap, row2H = ch * 0.085;
   const defs2 = [
+    ['homeAdv',    '🗺️ 闯关',   () => { if(!homeOpen() || loadingStart) return; ensureAudio(); uiScreen = 'adventure'; advScroll = 0; }],   // 【酷跑2】闯关冒险模式入口
     ['homeRank',   '🏆 好友榜', () => { if(!homeOpen() || loadingStart) return; ensureAudio(); openRank(); }],
     ['homeAch',    '📖 成就',   () => { if(!homeOpen() || loadingStart) return; ensureAudio(); achScroll = 0; uiScreen = 'ach'; }],
     ['homeTalent', '🌟 天赋',   () => { if(!homeOpen() || loadingStart) return; ensureAudio(); uiScreen = 'talent'; talentScroll = 0; }],   // 【酷跑2】天赋养成树入口
   ];
-  const bw2c = (startW - bGap * 2) / 3, tot2W = defs2.length * bw2c + (defs2.length - 1) * bGap;
+  const bw2c = (startW - bGap * (defs2.length - 1)) / defs2.length, tot2W = defs2.length * bw2c + (defs2.length - 1) * bGap;
   defs2.forEach((d, i) => {
     uiBtn({ id: d[0], x: scx2 - tot2W / 2 + i * (bw2c + bGap), y: row2Y, w: bw2c, h: row2H, label: d[1], size: fs(0.03),
             bg: 'rgba(13,16,36,0.85)', fg: '#dfe6f5', stroke: 'rgba(255,255,255,0.25)', bold: false, cb: d[2] });
@@ -5092,6 +5275,7 @@ function uiDrawRank(){
 /* —— 【留存包】② 成就页：可滚动列表（滚动手感和商店货架同一套），
    每条 = 表情+名字+描述+进度条(累计/目标)；达成打✅；带称号(🎖)的条目达成后能点击佩戴/再点摘下 —— */
 let achScroll = 0, achViewH = 1, achContentH = 0;   // 成就列表的滚动状态（同 shopScroll 三件套）
+let advScroll = 0, advViewH = 1, advContentH = 0;   // 【酷跑2】闯关选关列表的滚动状态（同上三件套）
 function uiDrawAch(){
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -5271,6 +5455,90 @@ function uiDrawTalent(){
   ctx.restore();
 }
 
+/* —— 【酷跑2】闯关选关页（uiScreen='adventure'）：全屏深色卡 + 可滚动关卡列表 ——
+ *   每行：序号+关名 / 终点米数·目标金币 / 历史最高星(★★☆) / 进入按钮(已解锁) 或 灰锁🔒(未解锁)。
+ *   滚动用 advScroll/advViewH/advContentH 三件套（与商店/成就/天赋同一套手感）。
+ *   zone id：stageGo-<id>（进入该关）/ advClose（关闭按钮）/ advBack（点空白关）。*/
+function uiDrawAdv(){
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const cw = canvas.width, ch = canvas.height;
+  const fs = k => Math.max(9, Math.round(ch * k));
+  ctx.fillStyle = 'rgba(8,12,24,0.65)';
+  ctx.fillRect(0, 0, cw, ch);
+  addZone('advBack', 0, 0, cw, ch, closeAdv);   // 点卡片外的空白＝关闭
+  const cardW = Math.min(cw * 0.64, ch * 1.9), cardH = ch * 0.92;
+  const cardX = (cw - cardW) / 2, cardY = (ch - cardH) / 2;
+  uiCard(cardX, cardY, cardW, cardH);
+  addZone('advCard', cardX, cardY, cardW, cardH, null);   // 卡片本身挡住，别穿透到下层
+  const pad = ch * 0.03;
+  const stageMax = save.stageMax || 1;
+  const prog = save.stageProg || {};
+  let y = cardY + pad;
+  // 标题行：左标题，右"已通关 N/总关数"
+  const clearedN = STAGES.filter(s => (prog[s.id] || 0) > 0).length;
+  dText('🗺️ 闯关冒险', cardX + pad, y + fs(0.05) * 0.6, fs(0.05), '#fff', 'left', true);
+  dText('已通关 ' + clearedN + ' / ' + STAGES.length, cardX + cardW - pad, y + fs(0.05) * 0.6, fs(0.036), '#ffd34d', 'right', true);
+  y += fs(0.05) + pad * 0.45;
+  dText('一关一关打：跑到终点过关，不受伤+集够金币拿满三星（天赋装备照常生效）',
+        cardX + pad, y + fs(0.026) * 0.7, fs(0.026), '#97a1b8', 'left');
+  y += fs(0.026) * 1.5 + pad * 0.35;
+  // 列表区（底部留给关闭按钮）
+  const closeH = ch * 0.085;
+  const closeY = cardY + cardH - pad - closeH;
+  const listX = cardX + pad, listW = cardW - pad * 2;
+  const listY = y, listH = closeY - pad * 0.5 - y;
+  const clip = { x: listX, y: listY, w: listW, h: listH };
+  const rowH = ch * 0.145;
+  advViewH = listH;
+  advContentH = STAGES.length * rowH;
+  advScroll = clamp(advScroll, Math.min(0, listH - advContentH), 0);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(listX, listY, listW, listH); ctx.clip();
+  STAGES.forEach((s, i) => {
+    const ry = listY + i * rowH + advScroll;
+    if(ry + rowH < listY || ry > listY + listH) return;   // 滚出视野的行不画
+    const unlocked = s.id <= stageMax;
+    const stars = prog[s.id] || 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';   // 行间细分隔线
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(listX, ry + rowH); ctx.lineTo(listX + listW, ry + rowH); ctx.stroke();
+    // 左：关卡序号图标框（已通关换金色底，未解锁灰底）
+    const pvH = rowH * 0.6, pvY = ry + (rowH - pvH) / 2;
+    ctx.fillStyle = !unlocked ? 'rgba(255,255,255,0.04)' : (stars > 0 ? 'rgba(255,211,77,0.14)' : 'rgba(255,255,255,0.07)');
+    dRR(listX, pvY, pvH, pvH, rowH * 0.12); ctx.fill();
+    dText(unlocked ? String(s.id) : '🔒', listX + pvH / 2, pvY + pvH / 2, fs(0.04), unlocked ? '#fff' : '#7a8398', 'center', true);
+    // 中：关名 + 终点/目标 + 三星（★已得 / ☆未得）
+    const tx2 = listX + pvH + ch * 0.024;
+    dText(unlocked ? s.name : '？？？', tx2, ry + rowH * 0.26, fs(0.034), unlocked ? (stars > 0 ? '#ffd34d' : '#fff') : '#7a8398', 'left', true);
+    dText('终点 ' + s.dist + 'm · 目标金币 ' + s.goalCoins, tx2, ry + rowH * 0.53, fs(0.026), '#97a1b8', 'left');
+    let starStr = '';
+    for(let d = 0; d < 3; d++) starStr += d < stars ? '★' : '☆';
+    dText(starStr, tx2, ry + rowH * 0.79, fs(0.03), stars > 0 ? '#ffd34d' : '#5b6478', 'left');
+    // 右：进入按钮（已解锁可点）/ 灰"未解锁"
+    const btnW = listW * 0.26, btnH = rowH * 0.42, btnX = listX + listW - btnW, btnY = ry + (rowH - btnH) / 2;
+    if(unlocked){
+      uiBtn({ id: 'stageGo-' + s.id, x: btnX, y: btnY, w: btnW, h: btnH,
+              label: stars > 0 ? '重玩' : '挑战', size: fs(0.03),
+              bg: '#ffd34d', fg: '#4a3500', stroke: '#3a2a00', clip: clip,
+              cb: () => startStage(s) });
+    } else {
+      uiBtn({ id: 'stageLock-' + s.id, x: btnX, y: btnY, w: btnW, h: btnH, label: '🔒 未解锁', size: fs(0.026),
+              disabled: true, bold: false });
+    }
+  });
+  ctx.restore();
+  if(advContentH > listH){   // 细滚动条：提示下面还有
+    const sbH = Math.max(listH * 0.08, listH * listH / advContentH);
+    const sbY = listY + (-advScroll / (advContentH - listH)) * (listH - sbH);
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    dRR(cardX + cardW - pad * 0.45, sbY, pad * 0.18, sbH, pad * 0.09); ctx.fill();
+  }
+  uiBtn({ id: 'advClose', x: listX, y: closeY, w: listW, h: closeH, label: '关 闭', size: fs(0.036),
+          bg: 'rgba(255,255,255,0.14)', fg: '#fff', bold: false, cb: closeAdv });
+  ctx.restore();
+}
+
 /* —— 死亡结算卡：内容来自 updateDeadCard，复活按钮的条件每帧现算（照抄网页版主循环） —— */
 function uiDrawDead(){
   ctx.save();
@@ -5283,16 +5551,20 @@ function uiDrawDead(){
   // 先算复活按钮该不该出现（逻辑照抄网页版主循环里的 revFree/revCost）
   const revFree = !save.freeReviveUsed;
   const revCost = reviveCost();   // 【酷跑2】复活价含重生天赋折扣（与 revive() 收费口径一致）
-  const showRev = !dailyMode && (revFree || save.coins >= revCost);
+  const adv = deadCard.adv;   // 【酷跑2】闯关结算：自成一套按钮（下一关/重玩/回主页），不摆复活/广告/礼包
+  const showRev = endlessOnly() && (revFree || save.coins >= revCost);   // 【酷跑2】闯关失败不复活（重试整关）
+  // 闯关下一关是否存在（通关 + 还有后续关 + 已解锁）
+  const nextStage = (adv && deadCard.advWin && curStage) ? STAGES.find(s => s.id === curStage.id + 1) : null;
+  const hasNext = !!(nextStage && nextStage.id <= (save.stageMax || 1));
   // 量一量卡片总高度，再居中摆
   const pad = ch * 0.028;
   const btnH = ch * 0.085, btnGap = ch * 0.013, homeH = ch * 0.06;
   const statH = deadCard.stats.length * ch * 0.042;
   const goalH = deadCard.goal ? ch * 0.075 : 0;
-  const giftTease = giftState() !== 'done';        // 【留存包】④ 明天还有礼包可领：在分数下面预告一句
+  const giftTease = !adv && giftState() !== 'done';        // 【留存包】④ 明天还有礼包可领：在分数下面预告一句（闯关不显示）
   const giftH = giftTease ? ch * 0.036 : 0;
-  const adH = dailyMode ? 0 : ch * 0.06 + btnGap;  // 【留存包】⑦ 广告复活占位按钮（日赛没有复活，不摆）
-  const nBtn = 1 + (showRev ? 1 : 0) + (dailyMode ? 1 : 0);
+  const adH = (adv || dailyMode) ? 0 : ch * 0.06 + btnGap;  // 【留存包】⑦ 广告复活占位按钮（日赛/闯关没有复活，不摆）
+  const nBtn = adv ? (1 + (hasNext ? 1 : 0)) : (1 + (showRev ? 1 : 0) + (dailyMode ? 1 : 0));   // 闯关：重玩 + (下一关?)
   const cardH = pad * 2 + ch * (0.06 + 0.042 + 0.095) + giftH + statH + goalH + nBtn * (btnH + btnGap) + adH + homeH;
   const cardW = Math.min(cw * 0.4, ch * 1.2);
   const cardX = (cw - cardW) / 2, cardY = Math.max(ch * 0.02, (ch - cardH) / 2);
@@ -5327,6 +5599,22 @@ function uiDrawDead(){
     y += goalH;
   }
   y += btnGap;
+  if(adv){
+    // 【酷跑2】闯关结算按钮：下一关(通关且有后续) → 重玩本关 → 回主页
+    if(hasNext){
+      uiBtn({ id: 'advNext', x: inX, y: y, w: inW, h: btnH, label: '➡️ 下一关：' + nextStage.name, size: fs(0.034),
+              bg: '#ffd34d', fg: '#4a3500', cb(){ if(game.state !== 'dead') return; ensureAudio(); startStage(nextStage); } });
+      y += btnH + btnGap;
+    }
+    // 重玩本关：adventureMode/curStage 仍在 → startGame 走闯关分支重置本关（复用 deadAgain id）
+    uiBtn({ id: 'deadAgain', x: inX, y: y, w: inW, h: btnH, label: deadCard.advWin ? '🔁 重玩本关' : '🔁 再试一次', size: fs(0.036),
+            bg: 'rgba(255,255,255,0.16)', fg: '#fff', cb(){ if(game.state !== 'dead') return; ensureAudio(); startLoading(() => startGame()); } });
+    y += btnH + btnGap;
+    uiBtn({ id: 'deadHome', x: inX, y: y, w: inW, h: homeH, label: '🏠 回主页', size: fs(0.03),
+            bg: 'none', fg: '#97a1b8', bold: false, cb(){ if(game.state !== 'dead') return; goHome(); } });
+    ctx.restore();
+    return;
+  }
   if(showRev){
     const nearTxt = (!game.newBest && game.startBest > 0 && game.score >= game.startBest * 0.85) ? '，冲纪录！' : '';
     const revTxt = revFree ? '🎁 新手专享：免费复活！' : '💰 花 ' + revCost + ' 金币复活' + nearTxt;
@@ -5508,6 +5796,9 @@ const UI = {
     if(uiTouch.on && uiScreen === 'talent'){   // 【酷跑2】天赋列表同样可拖动滚动
       talentScroll = clamp(talentScroll + (y - uiTouch.y), Math.min(0, talentViewH - talentContentH), 0);
     }
+    if(uiTouch.on && uiScreen === 'adventure'){   // 【酷跑2】闯关选关列表可拖动滚动
+      advScroll = clamp(advScroll + (y - uiTouch.y), Math.min(0, advViewH - advContentH), 0);
+    }
     uiTouch.x = x; uiTouch.y = y;
   },
   touchEnd(){
@@ -5543,6 +5834,7 @@ const UI = {
   drawRank: uiDrawRank,   // 【留存包】好友排行榜
   drawAch: uiDrawAch,     // 【留存包】成就页
   drawTalent: uiDrawTalent,   // 【酷跑2】天赋养成树
+  drawAdv: uiDrawAdv,         // 【酷跑2】闯关选关页
   drawDead: uiDrawDead,
   drawAvatarAsk: uiDrawAvatarAsk,
   drawGameBtns: uiDrawGameBtns,
@@ -5602,6 +5894,7 @@ function frame(t){
   if(uiScreen === 'rank') UI.drawRank();   // 【留存包】好友排行榜（榜单内容由开放数据域画）
   if(uiScreen === 'ach') UI.drawAch();     // 【留存包】成就页
   if(uiScreen === 'talent') UI.drawTalent();   // 【酷跑2】天赋养成树
+  if(uiScreen === 'adventure') UI.drawAdv();   // 【酷跑2】闯关选关页
   if(avatarAskOpen()) UI.drawAvatarAsk();   // 【小游戏改造】"把主角换成你"小卡片，画在最上层
   if(loadingStart){                       // 加载过场：合拢→开局→揭开→3·2·1
     drawLoading(); blitLoading();   // 【小游戏改造】
