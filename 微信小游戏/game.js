@@ -3898,34 +3898,40 @@ function drawHUD(){
     // 分数狂潮：进度条名字加金色 ×3 标记，比别的更显眼
     drawPBar('✨分数狂潮 ×3', POWER_INFO.scorex3.color, (scorex3Until - bgTime) / scorex3Total);
   }
-  // 最高分画在顶部正中：右上角的按钮是 HTML 元素，窗口变窄时会盖住右对齐的文字
+  // 屏幕正中信息列：用一个游标 cTop 从上往下逐条排版，任意组合（最高/冲刺/连击/横幅）都自动错开，不再叠字
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 17px ' + FONT;
   ctx.translate(-hudInsetL, 0);   // 【小游戏改造】下面是屏幕正中的文字，挪回真正的中心
-  ctx.textAlign = 'center';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  let cTop = 12;   // 中央列游标：每画一条就往下推一行的高度
   // 【酷跑2】闯关：正中显示"第X关 · 还剩Ym到终点"（取代"最高/日赛米数"那行，不另占位置）
   hudText(
     adventureMode && curStage
       ? '🗺️ 第' + curStage.id + '关 · 还剩 ' + Math.max(0, curStage.dist - Math.floor(game.runDist / 12)) + ' 米'
       : (dailyMode ? '🌞 ' + Math.min(3000, Math.floor(game.runDist / 12)) + ' / 3000 米'
                    : '最高 ' + game.best),
-    W / 2, 14);
+    W / 2, cTop);
+  cTop += 25;
   if(boostDist > 0 && game.runDist < boostDist && game.state === 'playing'){
     ctx.font = 'bold 16px ' + FONT;
     ctx.fillStyle = '#ffd34d';
-    hudText('🚀 开局冲刺 · 还剩 ' + Math.max(0, Math.ceil((boostDist - game.runDist) / 12)) + ' 米', W / 2, 36);
+    hudText('🚀 开局冲刺 · 还剩 ' + Math.max(0, Math.ceil((boostDist - game.runDist) / 12)) + ' 米', W / 2, cTop);
+    cTop += 23;
   }
-  // 【留存包】① 连击数：5 连起显示在"最高"下方，连击越高字越大（封顶 1.5 倍）；狂热时金色 + 剩余时间小条
+  // 【留存包】① 连击数：5 连起显示在上面那行下方，连击越高字越大（封顶 1.5 倍）；狂热时金色 + 剩余时间小条
   if(game.state === 'playing' && combo >= 5){
     const feverNow = bgTime < feverUntil;
-    ctx.font = 'bold ' + Math.round(15 * Math.min(1.5, 1 + combo / 100)) + 'px ' + FONT;
+    const cFs = Math.round(15 * Math.min(1.5, 1 + combo / 100));
+    ctx.font = 'bold ' + cFs + 'px ' + FONT;
     ctx.fillStyle = feverNow ? '#ffd34d' : '#fff';
-    hudText('x' + combo + ' 连击', W / 2, 34);
-    if(feverNow){   // 狂热剩余时间小条：5 秒倒着缩短
+    hudText('x' + combo + ' 连击', W / 2, cTop);
+    cTop += cFs + 6;
+    if(feverNow){   // 狂热剩余时间小条：5 秒倒着缩短，紧跟在连击下方
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      ctx.fillRect(W / 2 - 45, 58, 90, 5);
+      ctx.fillRect(W / 2 - 45, cTop, 90, 5);
       ctx.fillStyle = '#ff8a5c';
-      ctx.fillRect(W / 2 - 45, 58, 90 * clamp((feverUntil - bgTime) / 5, 0, 1), 5);
+      ctx.fillRect(W / 2 - 45, cTop, 90 * clamp((feverUntil - bgTime) / 5, 0, 1), 5);
+      cTop += 9;
     }
   }
   // 【内容扩展】字母收集进度：右上角四格「狐狸快跑」，集到的点亮（跑动中才显示）
@@ -3949,12 +3955,13 @@ function drawHUD(){
       ctx.fillText(LETTER_CHARS[i], cx + cell / 2, cy + cell / 2 + 1);
     }
   }
-  // 中央大横幅（破纪录 / 奖励关 / 复活 / 抓到兔子）
+  // 中央大横幅（破纪录 / 奖励关 / 复活 / 抓到兔子）：排在中央信息列下方，连击/冲刺多的时候自动让位，绝不压字
   if(bgTime < banner.until){
     ctx.globalAlpha = Math.min(1, (banner.until - bgTime) / 0.4);
     ctx.font = 'bold 28px ' + FONT;
     ctx.fillStyle = banner.color;
-    hudText(banner.text, W / 2, 48);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    hudText(banner.text, W / 2, Math.max(46, cTop + 4));
     ctx.globalAlpha = 1;
   }
   ctx.restore();
