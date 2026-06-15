@@ -250,8 +250,9 @@ const sfx = {
               beep({f0:340*m, f1:680*m, dur:0.13, type:'square', vol:0.04}); },
   land(){ beep({f0:160,  f1:90,   dur:0.07, type:'triangle', vol:0.035}); },
   slide(){ beep({f0:180, f1:70, dur:0.22, type:'sawtooth', vol:0.045}); },   // 【酷跑1】下滑：一道低沉下滑的"唰"
-  coin(){ beep({f0:1175, dur:0.06, type:'sine', vol:0.05});
-          beep({f0:1568, dur:0.09, type:'sine', vol:0.05, delay:0.06}); },
+  coin(){ const k = 1 + Math.min(combo, 24) * 0.03;   // 【手感】连吃币升调：连击越高音越往上爬（封顶 24 连，约 1.7 倍），听得出"越串越爽"
+          beep({f0:1175*k, dur:0.06, type:'sine', vol:0.05});
+          beep({f0:1568*k, dur:0.09, type:'sine', vol:0.05, delay:0.06}); },
   graze(){ beep({f0:1700, f1:2500, dur:0.06, type:'sine', vol:0.045}); },   // 【手感】险过：一声清脆上扬的"嗖"
   hit(){  beep({f0:220,  f1:90,   dur:0.18, type:'sawtooth', vol:0.05 }); },
   power(){ beep({f0:523, dur:0.08, type:'square', vol:0.05});               // 吃到道具：上行琶音
@@ -791,6 +792,8 @@ try{ parseChallengeQuery(wx.getLaunchOptionsSync().query); }catch(e){}
 /* —— 【留存包】①连击Fever ②震动反馈 ③累计统计 ④成就称号 ⑤礼包 ⑥周段位 —— */
 // ① 连击：吃金币 / 撞碎障碍 / 吃道具 / 跳过坑 都 +1；攒满 30 进入"狂热时刻"（5 秒得分加成）
 let combo = 0, comboBest = 0, feverUntil = 0;
+let hurtFlash = 0;          // 【打击感】受伤红闪到期时刻（bgTime）：撞击瞬间全屏红一下，配合顿帧放大"痛"
+let jumpedRun = false;      // 【新手】本局是否跳过至少一次（没跳过时给"点屏幕跳"引导，第一局才弹）
 function addCombo(){
   combo++;
   if(combo > comboBest) comboBest = combo;   // 记住本局连击峰值（局末写进存档）
@@ -1088,7 +1091,7 @@ function startGame(){
   combo = 0; comboBest = 0; feverUntil = 0;    // 【留存包】① 新一局连击从零攒
   game.state = 'playing';
   game.speed = SPEED_START;
-  game.runDist = 0; game.score = 0; game.coinCount = 0;
+  game.runDist = 0; game.score = 0; game.coinCount = 0; jumpedRun = false; hurtFlash = 0;
   game.penalty = 0; game.bonus = 0; invulnUntil = 0;
   playerHP = effMaxHP(); lastHurtAt = -99;   // 【血条Boss】新一局满血、清空受伤时刻（【酷跑2】铁骨天赋抬高上限）
   boss = null; bossDefeated = false; bossMode = false; bossAtks.length = 0; bossAt = BOSS_SCORE;   // 【血条Boss】新一局 Boss 状态全清
@@ -1242,6 +1245,7 @@ function stumble(){
   breakCombo();           // 【留存包】① 真正受伤：连击断了（护盾挡住的在上面已 return，不断）
   juiceVibrate('hurt');   // 【留存包】② 痛感震动
   hitStop(70);            // 【打击感】撞击顿帧
+  hurtFlash = bgTime + 0.12;   // 【打击感】全屏红闪一下
   game.shake = 8;
   setFace('hurt', 1.0);   // 痛苦表情
   sfx.hit();
@@ -1267,7 +1271,7 @@ function startChase(){
 function chaseHit(){
   if(bgTime < invulnUntil) return;
   playerHP -= 30; lastHurtAt = bgTime; invulnUntil = bgTime + 1.0;
-  game.shake = 12; breakCombo(); setFace('hurt', 1.0); juiceVibrate('hurt'); sfx.hit(); hitStop(90);   // 【打击感】巨石撞击重顿帧
+  game.shake = 12; breakCombo(); setFace('hurt', 1.0); juiceVibrate('hurt'); sfx.hit(); hitStop(90); hurtFlash = bgTime + 0.14;   // 【打击感】巨石撞击重顿帧+红闪
   burst(player.x + player.w / 2, player.y - player.h / 2, 18, ['#9a7b5a', '#c0a080', '#ffffff']);
   floatText(player.x + player.w / 2, player.y - player.h - 16, '巨石撞击 -30 ❤', '#ff5a5a');
   if(playerHP <= 0){ playerHP = 0; die('hit'); }
@@ -2691,6 +2695,7 @@ function updatePlayer(dt){
     p.vy = (jumpHeld !== null) ? JUMP_VY : JUMP_VY * 0.8;
     p.grounded = false;
     p.jumpsUsed = 1;      // 地面跳算第 1 段，连跳角色还能在空中续
+    jumpedRun = true;     // 【新手】跳过了 → 收起"点屏幕跳"引导
     p.lastPress = -1e9;   // 设回"很久以前"，表示这次按键已经用掉了
     addStat('jumps', 1);   // 【留存包】③ 累计跳跃数
     sfx.jump();
@@ -4437,6 +4442,25 @@ function render(){
     ctx.fillStyle = 'rgba(255,200,60,' + pulse.toFixed(3) + ')';
     ctx.fillRect(0, 0, W, H);
   }
+  // 【打击感】受伤红闪：撞击瞬间全屏红一下迅速淡出（配合顿帧把"痛"放大）
+  if(bgTime < hurtFlash){
+    ctx.fillStyle = 'rgba(255,40,40,' + (0.38 * (hurtFlash - bgTime) / 0.12).toFixed(3) + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
+  // 【新手】第一局还没跳过：在角色上方飘一条脉动"点屏幕跳！"，跳一下就消失
+  if(save.runs <= 1 && game.state === 'playing' && !jumpedRun && !paused){
+    const a = 0.6 + 0.4 * Math.sin(bgTime * 6);
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.font = 'bold 22px ' + FONT;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+    ctx.fillStyle = '#fff';
+    const hy = player.y - player.h - 26;
+    ctx.strokeText('👆 点屏幕跳！', player.x + player.w / 2, hy);
+    ctx.fillText('👆 点屏幕跳！', player.x + player.w / 2, hy);
+    ctx.restore();
+  }
   ctx.restore();
   drawHUD();
   drawOverlay();
@@ -5266,8 +5290,17 @@ function uiDrawHome(){
   dText('🏆 最高 ' + game.best + ' 分' + (save.streak ? ' · 🔥 连签 ' + save.streak + ' 天' : '') +
         ' · ' + rk0.rank.e + rk0.rank.name,
         cx, nickY + ch * 0.052, fs(0.028), '#97a1b8', 'center');
+  // 【收集进度总览】把散在各二级页的收集度聚到主页一行：一眼看到"就差几个了" → 忍不住再开一局补齐
+  {
+    const achUn = (save.ach && save.ach.un) || {};
+    const achN = ACHIEVEMENTS.filter(a => achUn[a.id]).length;
+    const starN = Object.values(save.stageProg || {}).reduce((a, b) => a + b, 0);
+    const charN = (save.chars || ['fox']).length;
+    dText('📖 ' + achN + '/' + ACHIEVEMENTS.length + '成就 · 🗺️ ' + starN + '★/36 · 🦊 ' + charN + '/' + Object.keys(CHARS).length + '角色',
+          cx, nickY + ch * 0.09, fs(0.026), '#9fb0cc', 'center');
+  }
   // 偶尔出现的活动/挑战信息：再往下小字提一句（fitText 限宽，免得伸到右边开始按钮底下）
-  let evY = nickY + ch * 0.103;
+  let evY = nickY + ch * 0.13;
   if(weekendBoost()){
     dText(fitText('🎉 周末狂欢：金币双倍进行中！', cw * 0.2, fs(0.028), true), cx, evY, fs(0.028), '#ffd9a0', 'center', true);
     evY += ch * 0.048;
