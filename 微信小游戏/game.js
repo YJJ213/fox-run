@@ -3910,46 +3910,64 @@ function drawHUD(){
   ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
   // 亮色天空上白字看不清：HUD 文字一律先描边再填色
   const hudText = (s, x, y) => { ctx.strokeText(s, x, y); ctx.fillText(s, x, y); };
-  // 【遮挡根治】整套 HUD 走"屏幕正中单列、自上而下游标排版"：角色永远固定在最左 x≈120，
-  //   够不到屏幕中央 → 人物跳动/飞行的整条通道再没有任何文字；单列游标又保证字与字互不重叠。
-  const CX = W / 2;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  let cY = 8;
+  // 【对标天天酷跑·根治遮挡】分两栏，全部落在角色泳道(x≤164)右侧 + 屏幕正中，角色跳/飞都够不到，栏内各自从上往下排不叠字：
+  //   左栏(LX=178，紧贴角色右侧)=得分/金币/血条/道具条；中栏(CX=正中)=最高·关卡·日赛/副行/冲刺/连击；横幅+字母格各自归位。
+  const LX = 178, CX = W / 2;
   const breaking = endlessOnly() && game.startBest > 0 && game.score > game.startBest && game.state !== 'ready';   // 【酷跑2】闯关不显示破纪录金光
-  // —— 得分（大号；破纪录变金）——
-  ctx.fillStyle = breaking ? '#ffd34d' : '#fff';
+  // ===== 左栏 =====
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  let lY = 8;
+  ctx.fillStyle = breaking ? '#ffd34d' : '#fff';   // 得分（大号；破纪录变金）
   ctx.font = 'bold 24px ' + FONT;
-  hudText('得分 ' + game.score, CX, cY);
-  cY += 29;
-  // —— 金币 ——
-  ctx.font = 'bold 15px ' + FONT; ctx.fillStyle = '#ffd34d';
-  hudText('🪙 ' + save.coins, CX, cY);
-  cY += 21;
-  // —— 血条（居中，❤数字压在条上）——
-  {
-    const hbW = 150, hbH = 12, hbX = CX - hbW / 2, hbY = cY;
-    const frac = clamp(playerHP / effMaxHP(), 0, 1);   // 【酷跑2】血条比例按有效上限算
+  hudText('得分 ' + game.score, LX, lY);
+  lY += 28;
+  ctx.font = 'bold 15px ' + FONT; ctx.fillStyle = '#ffd34d';   // 金币
+  hudText('🪙 ' + save.coins, LX, lY);
+  lY += 22;
+  {   // 血条（❤数字压条上居中）
+    const hbW = 128, hbH = 12, hbX = LX, hbY = lY;
+    const frac = clamp(playerHP / effMaxHP(), 0, 1);
     const hpColor = frac > 0.5 ? '#5bd66a' : frac > 0.25 ? '#ffd34d' : '#ff5a5a';
     ctx.save(); ctx.shadowBlur = 0;
     ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(hbX, hbY, hbW, hbH);
     ctx.fillStyle = hpColor; ctx.fillRect(hbX, hbY, hbW * frac, hbH);
     ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 2; ctx.strokeRect(hbX, hbY, hbW, hbH);
     ctx.restore();
-    ctx.font = 'bold 11px ' + FONT; ctx.fillStyle = '#fff';
-    hudText('❤ ' + Math.ceil(playerHP), CX, hbY);
-    cY += hbH + 6;
+    ctx.font = 'bold 11px ' + FONT; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+    hudText('❤ ' + Math.ceil(playerHP), hbX + hbW / 2, hbY);
+    ctx.textAlign = 'left';
+    lY += hbH + 6;
   }
-  // —— 主信息行：闯关进度 / 日赛米数 / 最高分 ——
-  ctx.font = 'bold 14px ' + FONT; ctx.fillStyle = '#cfe0ff';
+  // 道具剩余时间条（左栏，名字 + 64px 短条，一行一条，往下排——名字都短，整条不超过角色泳道与中栏的安全区）
+  const drawPBar = (name, color, frac) => {
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
+    hudText(name, LX, lY);
+    const nameW = ctx.measureText(name).width, bx = LX + nameW + 6, by = lY + 2;
+    ctx.save(); ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx, by, 64, 9);
+    ctx.fillStyle = color; ctx.fillRect(bx, by, 64 * clamp(frac, 0, 1), 9);
+    ctx.restore();
+    lY += 16;
+  };
+  if(power.type) drawPBar(POWER_INFO[power.type].name, POWER_INFO[power.type].color, (power.until - bgTime) / power.total);
+  if(bgTime < magnetUntil) drawPBar('磁铁', POWER_INFO.magnet.color, (magnetUntil - bgTime) / magnetTotal);
+  if(bgTime < coinx2Until) drawPBar('双倍', POWER_INFO.coinx2.color, (coinx2Until - bgTime) / coinx2Total);
+  if(bgTime < slowUntil) drawPBar('时停', POWER_INFO.slow.color, (slowUntil - bgTime) / slowTotal);
+  if(bgTime < shrinkUntil) drawPBar(POWER_INFO.shrink.name, POWER_INFO.shrink.color, (shrinkUntil - bgTime) / shrinkTotal);
+  if(bgTime < ghostUntil) drawPBar(POWER_INFO.ghost.name, POWER_INFO.ghost.color, (ghostUntil - bgTime) / ghostTotal);
+  if(bgTime < scorex3Until) drawPBar('狂潮×3', POWER_INFO.scorex3.color, (scorex3Until - bgTime) / scorex3Total);
+  // ===== 中栏（屏幕正中，游标 cY） =====
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  let cY = 8;
+  ctx.font = 'bold 16px ' + FONT; ctx.fillStyle = '#cfe0ff';   // 主行：闯关进度 / 日赛米数 / 最高分
   hudText(
     adventureMode && curStage
       ? '🗺️ 第' + curStage.id + '关 · 还剩 ' + Math.max(0, curStage.dist - Math.floor(game.runDist / 12)) + ' 米'
       : (dailyMode ? '🌞 ' + Math.min(3000, Math.floor(game.runDist / 12)) + ' / 3000 米'
                    : '最高 ' + game.best),
     CX, cY);
-  cY += 19;
-  // —— 副信息行：距纪录 / 挑战 / 新纪录 / 闯关金币进度 ——
-  let subLine, subColor;
+  cY += 21;
+  let subLine, subColor;   // 副行：距纪录 / 挑战 / 新纪录 / 闯关金币进度
   if(adventureMode && curStage){
     subLine = '💰 ' + stageCoins + '/' + curStage.goalCoins + ' · ' + (stageHurt ? '受伤✗' : '不受伤✓');
     subColor = stageHurt ? '#ff8aa0' : '#7fd89a';
@@ -3963,47 +3981,20 @@ function drawHUD(){
   } else if(game.startBest > 0){
     subLine = '距最高还差 ' + Math.max(1, game.startBest - game.score + 1) + ' 分'; subColor = '#c5cede';
   } else {
-    subLine = '创造你的第一个纪录吧！'; subColor = '#c5cede';
+    subLine = ''; subColor = '#c5cede';
   }
-  ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = subColor;
-  hudText(subLine, CX, cY);
-  cY += 19;
-  // —— 奖励关倒计时钩子 ——
-  if(game.state === 'playing' && endlessOnly() && bgTime >= bonusUntil && nextBonusAt - game.coinCount <= 10){
+  if(subLine){ ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = subColor; hudText(subLine, CX, cY); cY += 19; }
+  if(game.state === 'playing' && endlessOnly() && bgTime >= bonusUntil && nextBonusAt - game.coinCount <= 10){   // 奖励关钩子
     ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = '#ffd34d';
     hudText('再吃 ' + Math.max(1, nextBonusAt - game.coinCount) + ' 枚 → ✨奖励关', CX, cY);
     cY += 18;
   }
-  // —— 开局冲刺 ——
-  if(boostDist > 0 && game.runDist < boostDist && game.state === 'playing'){
+  if(boostDist > 0 && game.runDist < boostDist && game.state === 'playing'){   // 开局冲刺
     ctx.font = 'bold 14px ' + FONT; ctx.fillStyle = '#ffd34d';
     hudText('🚀 开局冲刺 · 还剩 ' + Math.max(0, Math.ceil((boostDist - game.runDist) / 12)) + ' 米', CX, cY);
     cY += 19;
   }
-  // —— 道具剩余时间条（每条 = [名字 + 进度条] 整组居中，一行一条，自动往下排）——
-  const drawPBar = (name, color, frac) => {
-    ctx.font = 'bold 12px ' + FONT;
-    const barW = 104, gap = 6, nameW = ctx.measureText(name).width;
-    const total = nameW + gap + barW, sx = CX - total / 2;
-    ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
-    ctx.strokeText(name, sx, cY); ctx.fillText(name, sx, cY);
-    const bx = sx + nameW + gap, by = cY + 2;
-    ctx.save(); ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx, by, barW, 9);
-    ctx.fillStyle = color; ctx.fillRect(bx, by, barW * clamp(frac, 0, 1), 9);
-    ctx.restore();
-    ctx.textAlign = 'center';
-    cY += 16;
-  };
-  if(power.type) drawPBar(POWER_INFO[power.type].name, POWER_INFO[power.type].color, (power.until - bgTime) / power.total);
-  if(bgTime < magnetUntil) drawPBar('磁铁', POWER_INFO.magnet.color, (magnetUntil - bgTime) / magnetTotal);
-  if(bgTime < coinx2Until) drawPBar('双倍金币', POWER_INFO.coinx2.color, (coinx2Until - bgTime) / coinx2Total);
-  if(bgTime < slowUntil) drawPBar('时停', POWER_INFO.slow.color, (slowUntil - bgTime) / slowTotal);
-  if(bgTime < shrinkUntil) drawPBar(POWER_INFO.shrink.name, POWER_INFO.shrink.color, (shrinkUntil - bgTime) / shrinkTotal);
-  if(bgTime < ghostUntil) drawPBar(POWER_INFO.ghost.name, POWER_INFO.ghost.color, (ghostUntil - bgTime) / ghostTotal);
-  if(bgTime < scorex3Until) drawPBar('✨分数狂潮×3', POWER_INFO.scorex3.color, (scorex3Until - bgTime) / scorex3Total);
-  // —— 连击（接着游标往下）——
-  if(game.state === 'playing' && combo >= 5){
+  if(game.state === 'playing' && combo >= 5){   // 连击
     const feverNow = bgTime < feverUntil;
     const cFs = Math.round(15 * Math.min(1.5, 1 + combo / 100));
     ctx.font = 'bold ' + cFs + 'px ' + FONT;
@@ -4039,13 +4030,13 @@ function drawHUD(){
       ctx.fillText(LETTER_CHARS[i], cx + cell / 2, cy + cell / 2 + 1);
     }
   }
-  // 中央大横幅（破纪录 / 奖励关 / 复活 / 抓到兔子）：排在整列信息最下方，永远压不到前面的字
+  // 中央大横幅（破纪录 / 奖励关 / 复活 / 抓到兔子）：落在左右两栏下方的空白中带，横向再宽也压不到顶部 HUD
   if(bgTime < banner.until){
     ctx.globalAlpha = Math.min(1, (banner.until - bgTime) / 0.4);
     ctx.font = 'bold 26px ' + FONT;
     ctx.fillStyle = banner.color;
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    hudText(banner.text, CX, Math.max(cY + 8, 74));
+    hudText(banner.text, CX, Math.min(150, Math.max(cY, lY) + 10));   // 排在两栏最低点之下、屏幕中带
     ctx.globalAlpha = 1;
   }
   ctx.restore();
