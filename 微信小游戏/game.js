@@ -1287,9 +1287,8 @@ function stumble(){
   game.penalty += 5;      // 【血条Boss】保留少量扣分（5）作为受伤手感，不再扣 20
   breakCombo();           // 【留存包】① 真正受伤：连击断了（护盾挡住的在上面已 return，不断）
   juiceVibrate('hurt');   // 【留存包】② 痛感震动
-  hitStop(70);            // 【打击感】撞击顿帧
-  hurtFlash = bgTime + 0.12;   // 【打击感】全屏红闪一下
-  game.shake = 8;
+  hurtFlash = bgTime + 0.08;   // 【打击感】撞击只轻微红闪一下（不做顿帧——绊倒很频繁，顿帧会一卡一卡，体验差）
+  game.shake = 6;
   setFace('hurt', 1.0);   // 痛苦表情
   sfx.hit();
   burst(player.x + player.w / 2, player.y - player.h / 2, 14, ['#ff9b4b', '#ffffff']);
@@ -1314,7 +1313,7 @@ function startChase(){
 function chaseHit(){
   if(bgTime < invulnUntil) return;
   playerHP -= 30; lastHurtAt = bgTime; invulnUntil = bgTime + 1.0;
-  game.shake = 12; breakCombo(); setFace('hurt', 1.0); juiceVibrate('hurt'); sfx.hit(); hitStop(90); hurtFlash = bgTime + 0.14;   // 【打击感】巨石撞击重顿帧+红闪
+  game.shake = 9; breakCombo(); setFace('hurt', 1.0); juiceVibrate('hurt'); sfx.hit(); hurtFlash = bgTime + 0.1;   // 巨石撞击：略强一点的红闪+震屏（同样不顿帧）
   burst(player.x + player.w / 2, player.y - player.h / 2, 18, ['#9a7b5a', '#c0a080', '#ffffff']);
   floatText(player.x + player.w / 2, player.y - player.h - 16, '巨石撞击 -30 ❤', '#ff5a5a');
   if(playerHP <= 0){ playerHP = 0; die('hit'); }
@@ -4485,9 +4484,10 @@ function render(){
     ctx.fillStyle = 'rgba(255,200,60,' + pulse.toFixed(3) + ')';
     ctx.fillRect(0, 0, W, H);
   }
-  // 【打击感】受伤红闪：撞击瞬间全屏红一下迅速淡出（配合顿帧把"痛"放大）
+  // 【打击感】受伤红闪：撞击瞬间屏幕边缘淡淡红一下迅速消失（封顶很低，撞多了也不刺眼、绝不顿帧）
   if(bgTime < hurtFlash){
-    ctx.fillStyle = 'rgba(255,40,40,' + (0.38 * (hurtFlash - bgTime) / 0.12).toFixed(3) + ')';
+    const a = Math.min(0.13, (hurtFlash - bgTime) * 1.4);
+    ctx.fillStyle = 'rgba(255,60,60,' + a.toFixed(3) + ')';
     ctx.fillRect(0, 0, W, H);
   }
   // 【新手】第一局还没跳过：在角色上方飘一条脉动"点屏幕跳！"，跳一下就消失
