@@ -415,6 +415,59 @@
     margin-top: 14px; width: 100%; border: none; border-radius: 8px; padding: 9px;
     background: rgba(255,255,255,.14); color: #fff; cursor: pointer; font-size: 14px;
   }
+  /* ========== 【质感升级】对标天天酷跑：玻璃渐变按钮 + 立体面板 + 渐变金标题（统一覆盖，置于最后生效） ========== */
+  #home{ background: #1a1336; }
+  #homeCanvas{ image-rendering: auto; }   /* 关掉像素化：让黄昏渐变背景平滑放大 */
+  #homeTitle{
+    width: min(92vw, 460px); margin: 5vh 0 2px; line-height: 1.04; text-align: center;
+    font-size: clamp(38px, 10vw, 64px); font-weight: 900; letter-spacing: 1px;
+    background: linear-gradient(#fff6c2, #ffd34d 52%, #ffab1e);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+    filter: drop-shadow(0 2px 0 #5a3d00) drop-shadow(0 3px 10px rgba(0,0,0,.4)) drop-shadow(0 0 16px rgba(255,170,40,.5));
+  }
+  #homeTitle span{
+    display: block; margin-top: 6px; font-size: 12px; letter-spacing: 6px; font-weight: bold;
+    -webkit-text-fill-color: rgba(255,255,255,.5); color: rgba(255,255,255,.5); filter: none;
+  }
+  /* 主行动按钮：渐变金 + 立体高光 */
+  #homeStart, #reviveBtn, #deadAdvNext, #signClaim{
+    background: linear-gradient(#ffe487, #ffd34d 45%, #ffb52e); border: none; color: #5a3d00;
+    box-shadow: 0 6px 16px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.6), inset 0 -3px 0 rgba(170,115,0,.30);
+  }
+  #homeStart{ font-size: 21px; padding: 15px; border-radius: 14px; }
+  #homeStart:active, #reviveBtn:active, #deadAdvNext:active, #signClaim:active{
+    transform: translateY(2px); box-shadow: 0 3px 8px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.5);
+  }
+  #signClaim:disabled{ background: linear-gradient(#454e64, #333a4d); color: #97a1b8; box-shadow: none; }
+  /* 次级玻璃按钮：深蓝玻璃渐变 */
+  #homeRow button, #againBtn, #signClose, #achClose, #talentClose, #advClose, #shopClose{
+    background: linear-gradient(rgba(56,66,94,.96), rgba(22,28,46,.96));
+    border: 1px solid rgba(255,255,255,.14); color: #dfe6f5;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.12); border-radius: 12px;
+  }
+  #homeRow button{ padding: 11px 4px; }
+  #homeRow button:active, #againBtn:active{ transform: translateY(2px); box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+  /* 信息面板：深玻璃渐变 + 顶部高光 */
+  #homeStats, #homeTasks, #homeBoosts{
+    background: linear-gradient(rgba(43,52,71,.92), rgba(22,28,43,.92));
+    border: 1px solid rgba(255,255,255,.10);
+    box-shadow: 0 8px 24px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08); border-radius: 12px;
+  }
+  /* 弹窗卡片：渐变 + 厚投影 + 顶部高光线 */
+  #deadCard, #signCard, #achCard, #talentCard, #advCard, #shopCard{
+    background: linear-gradient(#2b3447, #161c2b);
+    border: 1px solid rgba(255,255,255,.10);
+    box-shadow: 0 24px 70px rgba(0,0,0,.62), inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  /* 商店：金币价钱按钮渐变金（保留 :disabled 灰态），标签页激活态高光 */
+  .shop-row button:not(:disabled){
+    background: linear-gradient(#ffe487, #ffd34d 45%, #ffb52e); color: #5a3d00;
+    box-shadow: 0 4px 10px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.55);
+  }
+  .shop-row button:not(:disabled):active{ transform: translateY(1px); }
+  .shop-row button:disabled{ background: linear-gradient(#454e64, #333a4d); box-shadow: none; }
+  #copyBtn{ box-shadow: 0 4px 12px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.5); }
 </style>
 </head>
 <body>
@@ -445,9 +498,9 @@
 
 <!-- 主页：全屏像素风主菜单（独立场景页，不是浮层） -->
 <div id="home">
-  <canvas id="homeCanvas" width="320" height="180"></canvas>
+  <canvas id="homeCanvas" width="640" height="360"></canvas>
   <div id="homeUI">
-    <div class="homeSpacer"></div>
+    <div id="homeTitle">狐狸快跑呀<span>F O X　R U N</span></div>
     <div id="homeStats"></div>
     <button id="giftBtn" class="hidden">🎁 领取礼包</button><!-- 【留存包】③ 有礼包可领才显示 -->
     <div id="homeNick">昵称 <input id="nickInput" maxlength="12" placeholder="神秘小狐狸"> <span style="color:#5b667e">会写进你的挑战链接</span></div>
@@ -5244,23 +5297,48 @@ let homeScroll = 0;
 function drawHomeScene(){
   const t = performance.now() / 1000;
   homeScroll += 0.7;
-  hctx.fillStyle = '#0d1024'; hctx.fillRect(0, 0, 320, 180);     // 夜空
-  hctx.fillStyle = '#141a36'; hctx.fillRect(0, 96, 320, 84);
-  for(const s of homeStars){                                      // 像素星星
-    hctx.globalAlpha = 0.35 + 0.65 * Math.abs(Math.sin(t * 1.5 + s.tw));
+  hctx.setTransform(2, 0, 0, 2, 0, 0);   // 【质感升级】画布升到 640×360，按 2× 渲染：渐变和角色都清晰不糊
+  // 黄昏渐变天空（渐变放大不糊，取代纯色夜空）
+  const sky = hctx.createLinearGradient(0, 0, 0, 180);
+  sky.addColorStop(0, '#241a4d');
+  sky.addColorStop(0.45, '#3b2a6b');
+  sky.addColorStop(0.72, '#7e4a84');
+  sky.addColorStop(0.88, '#c87a72');
+  sky.addColorStop(1, '#f0a86a');
+  hctx.fillStyle = sky; hctx.fillRect(0, 0, 320, 180);
+  // 柔光月亮（外晕 + 本体）
+  hctx.save();
+  hctx.globalAlpha = 0.32; hctx.fillStyle = '#ffe9b0';
+  hctx.beginPath(); hctx.arc(264, 34, 20, 0, TAU); hctx.fill();
+  hctx.globalAlpha = 0.92; hctx.fillStyle = '#fff4d6';
+  hctx.beginPath(); hctx.arc(264, 34, 11, 0, TAU); hctx.fill();
+  hctx.restore();
+  for(const s of homeStars){                                      // 柔光星星（靠近地平线渐隐）
+    const fade = clamp((120 - s.y) / 70, 0, 1);
+    if(fade <= 0) continue;
+    hctx.globalAlpha = fade * (0.35 + 0.6 * Math.abs(Math.sin(t * 1.5 + s.tw)));
     hctx.fillStyle = '#fff';
-    hctx.fillRect(s.x | 0, s.y | 0, s.s, s.s);
+    hctx.beginPath(); hctx.arc(s.x, s.y, s.s * 0.5 + 0.35, 0, TAU); hctx.fill();
   }
   hctx.globalAlpha = 1;
-  hctx.fillStyle = '#ffe9b0';                                     // 像素月亮
-  hctx.fillRect(262, 22, 14, 14); hctx.fillRect(258, 26, 22, 6); hctx.fillRect(266, 18, 6, 22);
-  hctx.fillStyle = '#10162e';                                     // 远山剪影
-  hctx.beginPath(); hctx.moveTo(0, 150); hctx.lineTo(60, 104); hctx.lineTo(130, 150); hctx.closePath(); hctx.fill();
-  hctx.beginPath(); hctx.moveTo(90, 150); hctx.lineTo(180, 92); hctx.lineTo(280, 150); hctx.closePath(); hctx.fill();
-  hctx.beginPath(); hctx.moveTo(230, 150); hctx.lineTo(300, 112); hctx.lineTo(360, 150); hctx.closePath(); hctx.fill();
-  hctx.fillStyle = '#1c2447'; hctx.fillRect(0, 150, 320, 30);     // 地面
-  hctx.fillStyle = '#2c376a';
-  for(let x = -(homeScroll % 26); x < 320; x += 26) hctx.fillRect(x | 0, 156, 10, 3);
+  // 远山两层（远层更亮更朦胧=空气透视；近层更深）
+  hctx.fillStyle = '#5a4170';
+  hctx.beginPath(); hctx.moveTo(0, 150); hctx.lineTo(70, 110); hctx.lineTo(150, 150);
+  hctx.moveTo(200, 150); hctx.lineTo(300, 104); hctx.lineTo(360, 150); hctx.closePath(); hctx.fill();
+  hctx.fillStyle = '#2e2350';
+  hctx.beginPath(); hctx.moveTo(-20, 150); hctx.lineTo(60, 116); hctx.lineTo(140, 150);
+  hctx.moveTo(120, 150); hctx.lineTo(210, 96); hctx.lineTo(320, 150); hctx.closePath(); hctx.fill();
+  // 地平线暖光带
+  const hz = hctx.createLinearGradient(0, 138, 0, 152);
+  hz.addColorStop(0, 'rgba(255,190,120,0)');
+  hz.addColorStop(1, 'rgba(255,170,110,0.32)');
+  hctx.fillStyle = hz; hctx.fillRect(0, 138, 320, 14);
+  // 地面（竖向渐变 + 柔和跑道刻度）
+  const gnd = hctx.createLinearGradient(0, 150, 0, 180);
+  gnd.addColorStop(0, '#241f3e'); gnd.addColorStop(1, '#14122a');
+  hctx.fillStyle = gnd; hctx.fillRect(0, 150, 320, 30);
+  hctx.fillStyle = 'rgba(255,255,255,0.10)';
+  for(let x = -(homeScroll % 26); x < 320; x += 26) hctx.fillRect(x | 0, 156, 10, 2);
   hctx.save();                                                    // 奔跑的当前角色（戴头像也会显示）
   hctx.translate(64, 150); hctx.scale(0.85, 0.85);
   drawCharacter(hctx, CHARS[save.char] || CHARS.fox, {
@@ -5270,12 +5348,7 @@ function drawHomeScene(){
     avatar: (save.useAvatar && avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) ? avatarImg : null,
   });
   hctx.restore();
-  hctx.textAlign = 'center'; hctx.textBaseline = 'top';           // 大标题（低清放大自带像素感）
-  hctx.font = 'bold 38px sans-serif';
-  hctx.fillStyle = '#3a2a00'; hctx.fillText('狐狸快跑', 163, 27);
-  hctx.fillStyle = '#ffd34d'; hctx.fillText('狐狸快跑', 160, 24);
-  hctx.font = 'bold 9px monospace';
-  hctx.fillStyle = '#7e879c'; hctx.fillText('- F O X　R U N -', 160, 66);
+  // 大标题已挪到 DOM (#homeTitle) 用 CSS 渐变金+发光绘制，这里不再画低清标题
 }
 /* —— 加载过场：星际穿越线 + 狂奔剪影 + 像素进度条 —— */
 const loadEl = document.getElementById('loading');
