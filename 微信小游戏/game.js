@@ -4999,8 +4999,8 @@ function uiDrawHome(){
       bg: '#ffd34d', fg: '#4a3500', cb(){ claimGift(); } });
   }
 
-  // —— 标题正下方：昵称一行 + 战绩一行小字（旧版的大统计面板瘦身成两行字，不再挡场景） ——
-  const nickY = ch * 0.44;
+  // —— 标题正下方：昵称一行 + 战绩一行小字（紧贴副标题下方的空带；这个高度右侧是空的，避开右边的开始按钮，不再被它挡住） ——
+  const nickY = ch * 0.31;
   dText('昵称：' + (save.nick || '神秘小狐狸') + '  📝', cx, nickY, fs(0.032), '#dfe6f5', 'center');
   addZone('homeNick', cx - cw * 0.13, nickY - ch * 0.03, cw * 0.26, ch * 0.06, editNick);
   const rk0 = rankOf(weekBestNow());   // 【留存包】⑥ 周段位徽章拼在战绩后面（如 🥉青铜狐）
