@@ -46,6 +46,9 @@ const homeCv = wx.createCanvas(); homeCv.width = 320; homeCv.height = 180;   // 
 const hctx = homeCv.getContext('2d');
 const loadCv = wx.createCanvas(); loadCv.width = 160; loadCv.height = 90;    // 加载过场
 const lctx = loadCv.getContext('2d');
+const shareCv = wx.createCanvas(); shareCv.width = 500; shareCv.height = 400;   // 【社交】分享战报图离屏画布
+const shctx = shareCv.getContext('2d');
+let shareImg = '';          // 战报图临时文件路径（canvasToTempFilePath 成功后填上，做分享卡配图）
 
 // 游戏世界(900×300) → 手机屏幕 的等比缩放，多出来的上下空间是深色舞台边
 let DPR = sysInfo.pixelRatio || 1;   // 【小游戏改造】设备像素比：UI 层的坐标都用"设备像素"
@@ -759,15 +762,54 @@ function buildShare(){
     return {
       title: playerTitle() + nick + ' 今日挑战跑了 ' + drB + ' 分，全国同一张图，敢来比吗？',
       query: 'd=' + todayStr() + '&c=' + drB + '&n=' + encodeURIComponent(nick) + '&s=' + challengeSum(drB, nick),
+      imageUrl: shareImg || undefined,   // 【战报图】有就用，没有就退回微信默认截图
     };
   }
   if(game.best > 0){
     return {
       title: playerTitle() + nick + ' 在狐狸快跑呀跑了 ' + game.best + ' 分，不服来战！',
       query: 'c=' + game.best + '&n=' + encodeURIComponent(nick) + '&s=' + challengeSum(game.best, nick),
+      imageUrl: shareImg || undefined,
     };
   }
   return { title: '狐狸快跑呀——像素跑酷，来比比谁跑得远！', query: '' };
+}
+// 【社交·战报图】把"角色+称号+分数+挑衅"渲染成一张可炫耀的图，当分享卡配图（比一行字传播力强一个量级）
+function renderShareCard(){
+  const c = shctx;
+  const g = c.createLinearGradient(0, 0, 0, 400);   // 黄昏渐变底
+  g.addColorStop(0, '#241a4d'); g.addColorStop(0.55, '#3b2a6b'); g.addColorStop(1, '#7e4a84');
+  c.fillStyle = g; c.fillRect(0, 0, 500, 400);
+  c.fillStyle = 'rgba(255,255,255,0.45)';           // 星点点缀
+  for(let i = 0; i < 26; i++) c.fillRect((i * 83 % 470) + 12, (i * 47 % 150) + 12, 2, 2);
+  c.fillStyle = 'rgba(255,255,255,0.12)'; c.lineWidth = 0;   // 内描边框
+  c.strokeStyle = 'rgba(255,255,255,0.18)'; c.lineWidth = 3; c.strokeRect(10, 10, 480, 380);
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.font = 'bold 28px ' + FONT; c.fillStyle = '#ffd34d';
+  c.fillText('🦊 狐狸快跑呀', 250, 44);
+  c.save();   // 出战角色（小跑姿态）
+  c.translate(250, 205); c.scale(2.7, 2.7);
+  drawCharacter(c, CHARS[save.char] || CHARS.fox, {
+    time: 0.2, grounded: true, swing: 0.5, gliding: false, blinking: 0, dead: false,
+    pal: charC(save.char in CHARS ? save.char : 'fox'),
+    avatar: (save.useAvatar && avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) ? avatarImg : null,
+  });
+  c.restore();
+  const nick = save.nick || '神秘小狐狸';
+  c.font = 'bold 19px ' + FONT; c.fillStyle = '#dfe6f5';
+  c.fillText(playerTitle() + nick, 250, 250);
+  c.font = 'bold 46px ' + FONT; c.fillStyle = '#ffd34d';
+  c.fillText('最高 ' + game.best + ' 分', 250, 302);
+  c.font = 'bold 20px ' + FONT; c.fillStyle = '#ff8aa0';
+  c.fillText('🆚 敢来超过我吗？', 250, 350);
+  c.font = '14px ' + FONT; c.fillStyle = 'rgba(255,255,255,0.55)';
+  c.fillText('微信搜「狐狸快跑呀」一起跑', 250, 382);
+}
+function genShareImg(){   // 渲染战报图并转成临时文件（异步；失败就退回无图分享，绝不影响分享本身）
+  try{
+    renderShareCard();
+    wx.canvasToTempFilePath({ canvas: shareCv, success(res){ shareImg = res.tempFilePath; }, fail(){} });
+  }catch(e){}
 }
 // 【社交接通】主动分享：玩家在结算/破纪录/击败好友时点按钮，直接弹起微信转发(把上面备好的战书发出去)
 function shareChallenge(){
@@ -1172,6 +1214,7 @@ function die(cause){
   endRunStats(true);   // 【留存包】统计 / 成就 / 礼包 / 周段位 都在局末统一结算
   saveBest();
   updateDeadCard();   // 把结算信息填进 DOM 卡片
+  genShareImg();       // 【社交·战报图】死亡瞬间就把战报图渲染好，等玩家点"发战书"时已就绪
 }
 // 日赛成绩记录（与无尽模式的最高分完全分开）
 function recordDailyRun(){
