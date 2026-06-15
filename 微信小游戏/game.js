@@ -904,22 +904,40 @@ function endRunStats(died){
 const CHARS = {
   fox: { name:'橙狐', price:0, jumps:1, glide:false, kind:'fox',
     desc:'最初的伙伴，朴实可靠',
-    c:{ body:'#f8a155', body2:'#e0731f', dark:'#c96a25', belly:'#ffd9b0', ear:'#7c3f12', tail:'#e8833a', scarf:'#e84545' } },
+    c:{ body:'#f8a155', body2:'#e0731f', dark:'#c96a25', belly:'#ffd9b0', ear:'#7c3f12', tail:'#e8833a', scarf:'#e84545' },
+    trail:['#ff9b4b','#ffd9a0'] },
   pig: { name:'小猪噜噜', price:200, jumps:2, glide:false, kind:'pig',
     desc:'圆滚滚的二连跳选手：空中再按一次跳跃！',
-    c:{ body:'#fbb8cd', body2:'#ef8fb0', dark:'#d97fa0', belly:'#ffe3ec', snout:'#ffc7d8', scarf:'#4f87d6' } },
+    c:{ body:'#fbb8cd', body2:'#ef8fb0', dark:'#d97fa0', belly:'#ffe3ec', snout:'#ffc7d8', scarf:'#4f87d6' },
+    trail:['#ff8ac0','#ffd0e6'] },
   monkey: { name:'小猴跳跳', price:1200, jumps:3, glide:false, kind:'monkey',
     desc:'灵活的三连跳大师，空中还能再跳两次',
-    c:{ body:'#b5805a', body2:'#92603d', dark:'#7c5232', belly:'#e8c79e', face:'#e8c79e', scarf:'#ffd34d' } },
+    c:{ body:'#b5805a', body2:'#92603d', dark:'#7c5232', belly:'#e8c79e', face:'#e8c79e', scarf:'#ffd34d' },
+    trail:['#ffcf6b','#ffe9b0'] },
+  cat: { name:'闪电喵', price:1600, jumps:2, glide:false, kind:'cat',
+    desc:'敏捷机灵的猫：二连跳，身后拖一道闪电金尾迹',
+    c:{ body:'#ffd24d', body2:'#f2a93a', dark:'#cf8a1e', belly:'#fff3cf', ear:'#7a4a12', tail:'#f2b53a', scarf:'#3a3f57' },
+    trail:['#ffe24d','#fff3a0','#ffffff'] },
   snowfox: { name:'雪狐飘飘', price:2600, jumps:2, glide:true, kind:'fox',
     desc:'二连跳 + 滑翔：空中按住跳跃键，像羽毛一样飘',
-    c:{ body:'#f4f8fd', body2:'#d8e2ee', dark:'#b9c6d6', belly:'#ffffff', ear:'#8aa0b8', tail:'#dce6f2', scarf:'#7fb3ff' } },
+    c:{ body:'#f4f8fd', body2:'#d8e2ee', dark:'#b9c6d6', belly:'#ffffff', ear:'#8aa0b8', tail:'#dce6f2', scarf:'#7fb3ff' },
+    trail:['#bfe6ff','#ffffff'] },
   panda: { name:'熊猫滚滚', price:3000, jumps:2, glide:false, kind:'panda', perk:'shield',
     desc:'二连跳 + 每局开局自带一面护盾！',
-    c:{ body:'#f4f4f0', body2:'#dcdcd4', dark:'#2a2a2a', belly:'#ffffff', patch:'#2a2a2a', scarf:'#7fd89a' } },
+    c:{ body:'#f4f4f0', body2:'#dcdcd4', dark:'#2a2a2a', belly:'#ffffff', patch:'#2a2a2a', scarf:'#7fd89a' },
+    trail:['#bdf0cf','#ffffff'] },
+  cosmic: { name:'星河狐', price:4200, jumps:2, glide:true, kind:'fox', perk:'shield',
+    desc:'遨游星河的狐狸：二连跳 + 滑翔 + 开局护盾，拖出紫色星尘',
+    c:{ body:'#6b5cff', body2:'#3b2a8c', dark:'#2c2070', belly:'#d8d4ff', ear:'#241a55', tail:'#7d6cff', scarf:'#7df9ff' },
+    trail:['#b07dff','#7df9ff','#ffffff'] },
   dragon: { name:'小龙腾腾', price:5000, jumps:3, glide:true, kind:'dragon',
     desc:'传说级！三连跳 + 滑翔，几乎就是在飞',
-    c:{ body:'#5fd9ad', body2:'#2f9d7a', dark:'#2a8a6b', belly:'#d8ffe9', spike:'#ffd34d', wing:'#a9f0d6', scarf:'#ff8a5c' } },
+    c:{ body:'#5fd9ad', body2:'#2f9d7a', dark:'#2a8a6b', belly:'#d8ffe9', spike:'#ffd34d', wing:'#a9f0d6', scarf:'#ff8a5c' },
+    trail:['#5fd9ad','#a9f0d6'] },
+  flame: { name:'赤焰龙', price:6800, jumps:3, glide:true, kind:'dragon', perk:'shield',
+    desc:'烈焰龙王：三连跳 + 滑翔 + 开局护盾，身后拖着熊熊火焰',
+    c:{ body:'#ff7a3d', body2:'#d63a2a', dark:'#b32a1e', belly:'#ffe0b0', spike:'#ffd34d', wing:'#ffb070', scarf:'#3a3f57' },
+    trail:['#ff5a2d','#ffd24d','#ff9b3d'] },
 };
 const player = {
   x: 120, w: 44, h: 36,
@@ -1431,6 +1449,46 @@ function updateParticles(dt){
     if(f.life > 0.8) floats.splice(i, 1);
   }
 }
+// 【角色拖尾】每个角色自带一组专属颜色，跑动时身后持续吐出柔光小点，向后飘并淡出（对标天天酷跑的奔跑尾迹）
+let charTrail = [];
+let trailEmitT = 0;
+function updateTrail(dt){
+  if(game.state === 'playing'){
+    const cur = dailyMode ? CHARS.fox : (CHARS[save.char] || CHARS.fox);
+    const tc = cur.trail || ['#ffd34d'];
+    if(bgTime - trailEmitT > 0.028){
+      trailEmitT = bgTime;
+      const n = (boostDist > 0 && game.runDist < boostDist) ? 2 : 1;   // 冲刺时尾迹更浓
+      for(let i = 0; i < n; i++){
+        charTrail.push({
+          x: player.x + rand(-2, 8), y: player.y - player.h * 0.5 + rand(-7, 5),
+          vx: -90 - rand(0, 60), vy: rand(-14, 14),
+          life: 0, max: rand(0.35, 0.55), size: rand(5, 9),
+          color: tc[(Math.random() * tc.length) | 0],
+        });
+      }
+    }
+  }
+  for(let i = charTrail.length - 1; i >= 0; i--){
+    const p = charTrail[i];
+    p.life += dt;
+    if(p.life >= p.max){ charTrail.splice(i, 1); continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.size *= (1 - dt * 1.2);
+  }
+}
+function drawTrail(){
+  for(const p of charTrail){
+    const r = Math.max(0.5, p.size);
+    ctx.globalAlpha = (1 - p.life / p.max) * 0.7;
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+    g.addColorStop(0, p.color);
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
 
 /* ========== 10. 障碍物与金币的生成 ========== */
 // 设计原则：越高的障碍越窄，保证任何速度下都跳得过去（数值算过账，别随便改高度上限）
@@ -1882,6 +1940,7 @@ function letterComplete(){
 /* ========== 11. 每帧更新（游戏规则都在这里） ========== */
 function update(dt){
   bgTime += dt;
+  updateTrail(dt);   // 【角色拖尾】任何状态都推进/淡出尾迹粒子；只有 playing 时才吐新粒子（函数内部判断）
 
   if(game.state === 'ready'){
     game.dist += 60 * dt;          // 开始界面背景慢慢滚动
@@ -3747,6 +3806,35 @@ function drawCharacter(c, ch, o){
     eye(12, -24);
     c.fillStyle = '#1f6b52';   // 鼻孔
     c.beginPath(); c.arc(20, -19, 1.5, 0, TAU); c.fill();
+  } else if(ch.kind === 'cat'){
+    // —— 猫：竖直三角耳 + 上翘细尾 + 胡须，灵动版狐狸 ——
+    c.save();   // 细长往上翘的尾巴
+    c.translate(-19, -12);
+    c.rotate(-0.15 - wag * 0.5 + (o.gliding ? 0.4 : 0));
+    c.strokeStyle = col.tail; c.lineWidth = 7; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(0, 2); c.quadraticCurveTo(-18, 0, -20, -16); c.stroke();
+    c.fillStyle = col.dark;   // 尾尖一圈
+    c.beginPath(); c.arc(-20, -16, 3.5, 0, TAU); c.fill();
+    c.restore();
+    scarfTails();
+    legs();
+    body(14);
+    scarfKnot();
+    belly();
+    c.fillStyle = col.body;   // 竖直三角猫耳（比狐狸更直、更靠近）
+    tri(5, -34, 7, -47, 13, -34);
+    tri(13, -34, 19, -47, 21, -34);
+    c.fillStyle = col.ear || col.dark;
+    tri(7.6, -35, 8.8, -43, 11.4, -35);
+    tri(14.6, -35, 17, -43, 18.4, -35);
+    eye(12, -24);
+    c.fillStyle = '#ff8aa0';   // 粉色小三角鼻
+    c.beginPath(); c.moveTo(19.5, -19); c.lineTo(23, -19); c.lineTo(21.3, -16.3); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 1.2; c.lineCap = 'round';   // 胡须
+    c.beginPath();
+    c.moveTo(22, -18); c.lineTo(32, -20);
+    c.moveTo(22, -16); c.lineTo(32, -15);
+    c.stroke();
   }
 
   // —— 真人头像模式：把照片裁成圆形"贴纸"盖在头上，表情画在照片周围 ——
@@ -4109,6 +4197,7 @@ function render(){
   drawBoxes();     // 【内容扩展】神秘宝箱
   drawLetters();   // 【内容扩展】字母收集卡
   drawParticles();
+  drawTrail();     // 【角色拖尾】画在角色之后面（先画尾迹，再画角色盖在前面）
   drawPlayer();
   // （夜色滤镜已挪到背景层，见 drawBackground 之后）
   // 【血条Boss】Boss 战：铺一层暗红滤镜（写法同奖励关金色滤镜），轻微脉动营造危机感
@@ -4434,9 +4523,12 @@ const SHOP_GOODS = [
   { id: 'fox',     kind: 'char' },
   { id: 'pig',     kind: 'char' },
   { id: 'monkey',  kind: 'char' },
+  { id: 'cat',     kind: 'char' },
   { id: 'snowfox', kind: 'char' },
   { id: 'panda',   kind: 'char' },
+  { id: 'cosmic',  kind: 'char' },
   { id: 'dragon',  kind: 'char' },
+  { id: 'flame',   kind: 'char' },
   { id: 'dur', kind: 'up', name: '道具时长', desc: '每级让所有道具多持续 1.5 秒（最多 3 级）', prices: [100, 250, 500] },
 ];
 // 钻石商店的高级货（价格与网页版一致）
