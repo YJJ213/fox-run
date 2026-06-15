@@ -527,7 +527,7 @@ function letterCount(){ let n = 0; for(const g of letterGot) if(g) n++; return n
 let bonusUntil = 0;         // 超级奖励时间的截止时刻（吃金币攒出来的福利关）
 let bonusCount = 0;         // 本局进过几次奖励关（决定轮到哪种玩法）
 let bonusKind = 0;          // 本次奖励关玩法：0=大头雨 1=飞天黄金 2=狂暴冲撞
-let nextBonusAt = 25;       // 本局再吃到多少枚金币就进奖励关（第一次门槛低，让新手早点看到高光时刻；之后 +100）
+let nextBonusAt = 50;       // 本局再吃到多少枚金币就进奖励关（第一次 50，之后 +180——奖励关别太频繁，攒出来才珍贵）
 let reviveCount = 0;        // 本局已复活次数（复活费一次比一次贵：200、400、600……）
 let shieldOn = false;       // 护盾道具：挡一次撞击
 let petPulseAt = 0, petPulseUntil = 0;   // 精灵·星宝的吸金币脉冲计时
@@ -1058,7 +1058,7 @@ function startGame(){
   jumpHeld = null;
   face.until = 0;
   game.startBest = game.best; game.recordShown = false;
-  bonusUntil = 0; nextBonusAt = 25; reviveCount = 0; shieldOn = false;
+  bonusUntil = 0; nextBonusAt = 50; reviveCount = 0; shieldOn = false;
   bonusCount = 0; bonusKind = 0; magnetUntil = 0; coinx2Until = 0; goldStorm = false;
   patQueue = []; nextMeteorAt = 5000; game.milestone = 0; mothUsed = false; slowUntil = 0;
   lastBarX = 0;   // 【酷跑1】新一局清掉上一局的横杆锚点，免得开局贴地币位置错乱
@@ -1209,7 +1209,7 @@ function startBonus(){
   bonusKind = bonusCount % 3;
   bonusCount++;
   bonusUntil = bgTime + 6;
-  nextBonusAt = game.coinCount + 100;  // 下次门槛从"当前数量"重新起算，奖励关永远不会连环触发
+  nextBonusAt = game.coinCount + 180;  // 下次门槛从"当前数量"重新起算 +180，奖励关永远不会连环触发、也不会太频繁
   taskProg('bonus', 1);
   obstacles.length = 0;
   pits.length = 0;
@@ -1523,13 +1523,18 @@ const PATTERNS = [
   { tier: 3, seq: [['pendulum', 0], ['pendulum', 460]] },                 // 双摆锤：后期精英段
   { tier: 3, seq: [['roller', 0]] },                                      // 滚石：贴地滚来，跳它！
   { tier: 3, seq: [['pit', 0], ['pit', 330], ['coinsOver', -1]] },
-  // 【酷跑1】下滑躲避：横杆 'bar' 站着撞、下滑可过。tier1 起登场，越往后越密。
+  // 【酷跑1】下滑躲避：横杆 'bar' 站着撞、下滑可过。下滑是核心操作，tier1 起就常见、场景要够多。
   { tier: 1, seq: [['bar', 0]] },                                          // 单根横杆：第一次出现，教会下滑
   { tier: 1, seq: [['lowbar', 0], ['coinsLow', -1]] },                     // 低横杆 + 杆下贴地币：奖励滑过去
+  { tier: 1, seq: [['bar', 0], ['coinsLow', -1]] },                        // 横杆 + 杆下币：基础常见款
   { tier: 2, seq: [['bar', 0], ['coinsLow', -1], ['rock', 360]] },         // 先滑过横杆（顺手吃贴地币），再跳石头
   { tier: 2, seq: [['rock', 0], ['bar', 340]] },                           // 跳石头紧接着下滑横杆：跳+滑连招
+  { tier: 2, seq: [['lowbar', 0], ['lowbar', 330], ['coinsLow', -1]] },    // 连续两道低杆：保持低姿连滑
+  { tier: 2, seq: [['bar', 0], ['cactus', 370]] },                         // 滑横杆紧接着跳仙人掌：滑↔跳切换
   { tier: 3, seq: [['bar', 0], ['lowbar', 360], ['coinsLow', -1]] },       // 连续两道横杆：保持低姿连滑
   { tier: 3, seq: [['cactus', 0], ['bar', 320], ['coinsLow', -1]] },       // 跳仙人掌再滑横杆：跳↔滑切换
+  { tier: 3, seq: [['bar', 0], ['rock', 330], ['bar', 660]] },             // 滑-跳-滑三连击
+  { tier: 3, seq: [['lowbar', 0], ['pit', 350]] },                         // 滑过低杆紧接着跳坑：滑完立刻跳
 ];
 let patQueue = [];          // 当前组合段里还没入场的元素
 let lastPitX = 0;           // 最近一个坑的中心（给"坑上金币弧"定位）
@@ -2787,15 +2792,20 @@ function drawPits(){
     g.addColorStop(1, '#120e1a');
     ctx.fillStyle = g;
     ctx.fillRect(pt.x, GROUND_Y, pt.w, H - GROUND_Y);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';   // 洞口两侧的阴影边，提示这里是悬崖
-    ctx.fillRect(pt.x, GROUND_Y, 4, H - GROUND_Y);
-    ctx.fillRect(pt.x + pt.w - 4, GROUND_Y, 4, H - GROUND_Y);
-    if(pt.warn){   // 新手教学坑：洞口上方跳动的红色感叹号
-      ctx.fillStyle = '#ff5b5b';
-      ctx.font = 'bold 24px ' + FONT;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('!', pt.x + pt.w / 2, GROUND_Y - 20 + Math.sin(bgTime * 7) * 5);
-    }
+    // 【清晰化】黑坑在深色地面上极难看清——给洞口两侧加高对比"危险唇"(亮黄) + 内侧暗边，边界一眼就分清
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(pt.x + 3, GROUND_Y, 4, H - GROUND_Y);
+    ctx.fillRect(pt.x + pt.w - 7, GROUND_Y, 4, H - GROUND_Y);
+    ctx.fillStyle = '#ffd34d';
+    ctx.fillRect(pt.x - 2, GROUND_Y - 1, 6, 6);
+    ctx.fillRect(pt.x + pt.w - 4, GROUND_Y - 1, 6, 6);
+    // 洞口上方常驻一个脉动的警示标（坑=必死，所有坑都要醒目，不只教学坑）
+    const wy = GROUND_Y - 22 + Math.sin(bgTime * 7) * 4, wx2 = pt.x + pt.w / 2;
+    ctx.fillStyle = pt.warn ? '#ff4d4d' : 'rgba(255,90,90,0.92)';
+    ctx.beginPath();   // 倒三角警示牌
+    ctx.moveTo(wx2 - 9, wy - 7); ctx.lineTo(wx2 + 9, wy - 7); ctx.lineTo(wx2, wy + 8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(wx2 - 1.5, wy - 5, 3, 6); ctx.fillRect(wx2 - 1.5, wy + 2, 3, 3);   // 叹号
   }
   // 纪录旗：上次破纪录跑到的位置，插一面小金旗（追过它就是新纪录的节奏！）
   if(endlessOnly() && game.state === 'playing' && save.bestDist > 1000){   // 【酷跑2】闯关赛道不画无尽纪录旗
@@ -2812,9 +2822,14 @@ function drawPits(){
     }
   }
 }
+const GROUND_OBS = { cactus: 1, double: 1, spikes: 1, roller: 1, trampoline: 1 };   // 落地型障碍：脚下投影
 function drawObstacles(){
   for(const o of obstacles){
     const top = GROUND_Y - o.h;
+    if(GROUND_OBS[o.type]){   // 【清晰化】落地阴影：障碍脚下一团暗影，和五花八门的背景拉开对比，更醒目
+      ctx.fillStyle = 'rgba(0,0,0,0.20)';
+      ctx.beginPath(); ctx.ellipse(o.x + o.w / 2, GROUND_Y + 2, Math.max(10, o.w * 0.55), 5, 0, 0, TAU); ctx.fill();
+    }
     if(o.type === 'cactus'){
       const cx = o.x + o.w / 2;
       ctx.fillStyle = '#3f8c4b';
@@ -5926,28 +5941,32 @@ function uiDrawGameBtns(){
   ctx.restore();
   drawSlideBtn();   // 【酷跑1】右下角"⬇ 滑"圆钮（和暂停/静音同风格，放右下角让新手一眼看到）
 }
-// 【酷跑1】游戏中右下角的"下滑"圆钮：点它＝下滑躲避。和暂停/静音同风格，但更大更醒目（核心操作）。
+// 【酷跑1】右下角核心操作钮：上=跳、下=滑。做大 + 半透明（不挡视野），新手一眼就能上手。
+//   跳钮在 touchStart 里"按下即触发"（和点屏幕一样支持长按跳更高）；滑钮抬手触发 startSlide。
+function actionBtn(cx, cy, r, icon, label, active, rgb){
+  ctx.fillStyle = active ? 'rgba(' + rgb + ',0.42)' : 'rgba(255,255,255,0.13)';   // 半透明底，不挡视野
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill();
+  ctx.strokeStyle = active ? 'rgba(' + rgb + ',0.95)' : 'rgba(255,255,255,0.38)';
+  ctx.lineWidth = Math.max(2, r * 0.07);
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
+  ctx.fillStyle = active ? 'rgba(255,255,255,0.96)' : 'rgba(255,255,255,0.5)';    // 文字半透明
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold ' + (r * 0.62) + 'px ' + FONT;
+  ctx.fillText(icon, cx, cy - r * 0.2);
+  ctx.font = 'bold ' + (r * 0.42) + 'px ' + FONT;
+  ctx.fillText(label, cx, cy + r * 0.36);
+}
 function drawSlideBtn(){
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   const cw = canvas.width, ch = canvas.height;
-  const r = ch * 0.072, m = ch * 0.03;
-  let cx = cw - m - r, cy = ch - m - r;        // 圆心：贴右下角
-  if(SAFE.r > 0) cx -= SAFE.r;                  // 躲开右侧安全区（刘海屏横向）
-  const pressing = player.sliding;             // 正在滑时按钮高亮，给点击反馈
-  // 圆底（按下/滑行中泛青光）
-  ctx.fillStyle = pressing ? 'rgba(142,230,255,0.42)' : 'rgba(255,255,255,0.18)';
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill();
-  ctx.strokeStyle = pressing ? 'rgba(142,230,255,0.95)' : 'rgba(255,255,255,0.5)';
-  ctx.lineWidth = Math.max(2, r * 0.08);
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
-  // "⬇ 滑"字样
-  ctx.fillStyle = '#fff';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = 'bold ' + (r * 0.66) + 'px ' + FONT;
-  ctx.fillText('⬇', cx, cy - r * 0.22);
-  ctx.font = 'bold ' + (r * 0.42) + 'px ' + FONT;
-  ctx.fillText('滑', cx, cy + r * 0.38);
+  const r = ch * 0.094, m = ch * 0.03;          // 比原来(0.072)更大
+  let cx = cw - m - r, cy = ch - m - r;          // 滑钮圆心：贴右下角
+  if(SAFE.r > 0) cx -= SAFE.r;                    // 躲开右侧安全区（刘海屏横向）
+  const jcy = cy - 2 * r - ch * 0.022;           // 跳钮在滑钮正上方
+  actionBtn(cx, jcy, r, '⬆', '跳', jumpHeld === 'pointer', '90,200,255');
+  addZone('btnJump', cx - r, jcy - r, r * 2, r * 2, () => {});   // 跳跃在 touchStart 里按下即触发
+  actionBtn(cx, cy, r, '⬇', '滑', player.sliding, '142,230,255');
   addZone('btnSlide', cx - r, cy - r, r * 2, r * 2, () => startSlide());
   ctx.restore();
 }
@@ -5967,7 +5986,9 @@ const UI = {
     for(let i = UI.zones.length - 1; i >= 0; i--){
       const z = UI.zones[i];
       if(x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h){
-        // 【小游戏改造】按钮"抬起时才触发"（和网页版 click 一致）：
+        // 跳钮特殊：按下即起跳（和点屏幕一样，支持长按跳更高），抬手在 touchEnd 里松开
+        if(z.id === 'btnJump'){ uiTouch.jumpBtn = true; pressJump('pointer'); return; }
+        // 【小游戏改造】其它按钮"抬起时才触发"（和网页版 click 一致）：
         // 想滚商店货架的手指就算落在按钮上，拖走也不会误买
         uiTouch.pendId = z.cb ? z.id : null;
         return;   // 点在界面上（哪怕是卡片空白处）就不再当游戏操作
@@ -6001,6 +6022,7 @@ const UI = {
   },
   touchEnd(){
     uiTouch.on = false;
+    if(uiTouch.jumpBtn){ uiTouch.jumpBtn = false; releaseJump('pointer'); return; }   // 跳钮抬手：松开（长按越久跳越高）
     const pid = uiTouch.pendId; uiTouch.pendId = null;
     if(pid){
       // 抬起时手指还停在同一个按钮上才算点击（按钮每帧重画，按 id 找它现在的位置）
