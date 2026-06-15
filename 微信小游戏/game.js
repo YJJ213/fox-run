@@ -3818,7 +3818,10 @@ function drawParticles(){
 function drawHUD(){
   if(game.state === 'ready' && homeOpen()) return;   // 大厅开着时不画 HUD：一屏一焦点
   ctx.save();
-  ctx.translate(hudInsetL, 0);   // 【小游戏改造】整块记分牌右移，躲开 iPhone 刘海
+  // 【遮挡修复】记分牌整块右移到"角色跳跃通道"右侧：角色固定在 x≈120–164，往上跳/飞都不再穿过 HUD 文字；
+  //   同时不小于刘海安全区。下方中央文字段会用 -hudL 挪回真正的屏幕中心。
+  const hudL = Math.max(hudInsetL, 178);
+  ctx.translate(hudL, 0);
   ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 4;
   ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
   // 亮色天空上白字看不清：HUD 文字一律先描边再填色
@@ -3929,7 +3932,7 @@ function drawHUD(){
   // 屏幕正中信息列：用一个游标 cTop 从上往下逐条排版，任意组合（最高/冲刺/连击/横幅）都自动错开，不再叠字
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 17px ' + FONT;
-  ctx.translate(-hudInsetL, 0);   // 【小游戏改造】下面是屏幕正中的文字，挪回真正的中心
+  ctx.translate(-hudL, 0);   // 【小游戏改造】下面是屏幕正中的文字，挪回真正的中心（用 hudL 抵消上面的整块右移）
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   let cTop = 12;   // 中央列游标：每画一条就往下推一行的高度
   // 【酷跑2】闯关：正中显示"第X关 · 还剩Ym到终点"（取代"最高/日赛米数"那行，不另占位置）

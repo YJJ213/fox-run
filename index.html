@@ -4434,6 +4434,10 @@ function drawParticles(){
 function drawHUD(){
   if(game.state === 'ready' && homeOpen()) return;   // 大厅开着时不画 HUD：一屏一焦点
   ctx.save();
+  // 【遮挡修复】记分牌整块右移到"角色跳跃通道"右侧（角色固定 x≈120–164），网页无刘海故固定 178；
+  //   下方中央文字段会用 -hudL 挪回真正的屏幕中心。
+  const hudL = 178;
+  ctx.translate(hudL, 0);
   ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 4;
   ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
   // 亮色天空上白字看不清：HUD 文字一律先描边再填色
@@ -4541,6 +4545,7 @@ function drawHUD(){
     // 分数狂潮：进度条名字加金色 ×3 标记，比别的更显眼
     drawPBar('✨分数狂潮 ×3', POWER_INFO.scorex3.color, (scorex3Until - bgTime) / scorex3Total);
   }
+  ctx.translate(-hudL, 0);   // 抵消上面记分牌的整块右移，下面中央文字回到真正的屏幕中心
   // 屏幕正中信息列：用一个游标 cTop 从上往下逐条排版，任意组合（最高/冲刺/连击/横幅）都自动错开，不再叠字
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 17px ' + FONT;
