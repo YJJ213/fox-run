@@ -2606,11 +2606,16 @@ function drawBackground(pal){
   // 【内容扩展】当前世界专属背景装饰（藤蔓/霓虹灯牌/气泡/熔岩泡/糖果），画在山之后、地面之前
   drawWorldDeco(pal);
 
-  // 地面
-  ctx.fillStyle = pal.ground;
+  // 地面：竖向渐变（顶部受光略亮、越往下越暗）+ 顶部一道受光亮边 + 暗接缝
+  const gg = ctx.createLinearGradient(0, GROUND_Y, 0, H);
+  gg.addColorStop(0, shade(pal.ground, 0.06));
+  gg.addColorStop(1, shade(pal.ground, -0.28));
+  ctx.fillStyle = gg;
   ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
-  ctx.fillStyle = 'rgba(0,0,0,0.18)';
-  ctx.fillRect(0, GROUND_Y, W, 3);
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';   // 草皮/跑道边缘的高光
+  ctx.fillRect(0, GROUND_Y, W, 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.fillRect(0, GROUND_Y + 2, W, 3);
   // 地上的小石子跟着世界一起往左跑，速度感全靠它们
   ctx.fillStyle = 'rgba(0,0,0,0.13)';
   for(let x = -(game.dist % 90); x < W; x += 90){
@@ -3330,13 +3335,26 @@ function drawCoins(){
     const spin = Math.abs(Math.cos(bgTime * 5 + c.phase));   // 左右压缩模拟旋转
     ctx.save();
     ctx.translate(c.x, c.y);
+    // 柔和金色外发光：金币在任何背景上都跳出来
+    const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, 14);
+    glow.addColorStop(0, 'rgba(255,221,90,0.55)');
+    glow.addColorStop(1, 'rgba(255,221,90,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, 0, 14, 0, TAU); ctx.fill();
     ctx.scale(Math.max(0.15, spin), 1);
-    ctx.fillStyle = '#d9a420';
-    ctx.beginPath(); ctx.arc(0, 0, 9, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#ffd34d';
-    ctx.beginPath(); ctx.arc(0, 0, 7, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#fff3b0';
-    ctx.fillRect(-2, -4, 2, 8);
+    // 深金外圈
+    ctx.fillStyle = '#c8920f';
+    ctx.beginPath(); ctx.arc(0, 0, 9.5, 0, TAU); ctx.fill();
+    // 主体径向渐变（左上亮、右下暗 = 金属球面）
+    const cg = ctx.createRadialGradient(-2.5, -3, 1, 0, 0, 9);
+    cg.addColorStop(0, '#fff6c8');
+    cg.addColorStop(0.45, '#ffd34d');
+    cg.addColorStop(1, '#e8a317');
+    ctx.fillStyle = cg;
+    ctx.beginPath(); ctx.arc(0, 0, 8, 0, TAU); ctx.fill();
+    // 高光点
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath(); ctx.ellipse(-2.6, -3.2, 2.2, 1.4, -0.5, 0, TAU); ctx.fill();
     ctx.restore();
   }
 }
@@ -3373,6 +3391,16 @@ function drawPet(p){
 function drawPlayer(){
   const p = player;
   const ch = dailyMode ? CHARS.fox : (CHARS[save.char] || CHARS.fox);
+  // 脚下接地阴影：在地面投一团柔影，跳得越高越小越淡（让角色"踩在地上"而不是飘着）
+  {
+    const air = clamp((GROUND_Y - p.y) / 130, 0, 1);   // 离地高度比例（0=贴地，1=跳到高处）
+    const sa = 0.30 * (1 - air * 0.72);
+    if(sa > 0.02){
+      const sw = p.w * (0.95 - air * 0.45);
+      ctx.fillStyle = 'rgba(0,0,0,' + sa.toFixed(3) + ')';
+      ctx.beginPath(); ctx.ellipse(p.x + p.w / 2, GROUND_Y - 1, Math.max(6, sw), Math.max(2.5, sw * 0.26), 0, 0, TAU); ctx.fill();
+    }
+  }
   // 坐骑（画在角色身后）：火箭滑板优先于筋斗云
   if(save.board && !dailyMode){
     ctx.fillStyle = '#ff7847';
