@@ -852,9 +852,7 @@ function breakCombo(){ combo = 0; }   // 真正受伤时调：连击断了（护
 
 // ② 震动反馈：手机轻轻"哒"一下，增加打击感（不支持的设备静默跳过）
 function juiceVibrate(kind){
-  // 【打击感】震动分级：受伤/巨石撞击=重，撞碎/抓兔=中，其余(吃币/狂热/险过)=轻
-  const type = (kind === 'hurt') ? 'heavy' : (kind === 'smash' || kind === 'bunny') ? 'medium' : 'light';
-  try{ wx.vibrateShort({ type: type }); }catch(e){}
+  try{ wx.vibrateShort({ type: 'light' }); }catch(e){}   // 恢复原版：统一轻震（之前的震动分级也一并撤掉，避免撞击过重）
 }
 // 【打击感】命中顿帧(hit-stop)：撞击瞬间把世界冻结几十毫秒，"撞到了"从看到变成感觉到
 let freezeUntil = 0;
@@ -1287,8 +1285,7 @@ function stumble(){
   game.penalty += 5;      // 【血条Boss】保留少量扣分（5）作为受伤手感，不再扣 20
   breakCombo();           // 【留存包】① 真正受伤：连击断了（护盾挡住的在上面已 return，不断）
   juiceVibrate('hurt');   // 【留存包】② 痛感震动
-  hurtFlash = bgTime + 0.08;   // 【打击感】撞击只轻微红闪一下（不做顿帧——绊倒很频繁，顿帧会一卡一卡，体验差）
-  game.shake = 6;
+  game.shake = 8;         // 撞障碍：恢复原版纯震屏（不加红闪/顿帧——用户反馈太夸张）
   setFace('hurt', 1.0);   // 痛苦表情
   sfx.hit();
   burst(player.x + player.w / 2, player.y - player.h / 2, 14, ['#ff9b4b', '#ffffff']);
@@ -1313,7 +1310,7 @@ function startChase(){
 function chaseHit(){
   if(bgTime < invulnUntil) return;
   playerHP -= 30; lastHurtAt = bgTime; invulnUntil = bgTime + 1.0;
-  game.shake = 9; breakCombo(); setFace('hurt', 1.0); juiceVibrate('hurt'); sfx.hit(); hurtFlash = bgTime + 0.1;   // 巨石撞击：略强一点的红闪+震屏（同样不顿帧）
+  game.shake = 12; breakCombo(); setFace('hurt', 1.0); juiceVibrate('hurt'); sfx.hit();   // 巨石撞击：恢复原版纯震屏（无红闪/顿帧）
   burst(player.x + player.w / 2, player.y - player.h / 2, 18, ['#9a7b5a', '#c0a080', '#ffffff']);
   floatText(player.x + player.w / 2, player.y - player.h - 16, '巨石撞击 -30 ❤', '#ff5a5a');
   if(playerHP <= 0){ playerHP = 0; die('hit'); }
@@ -4482,12 +4479,6 @@ function render(){
   if(bgTime < scorex3Until){
     const pulse = 0.06 + 0.05 * (0.5 + 0.5 * Math.sin(bgTime * 6));
     ctx.fillStyle = 'rgba(255,200,60,' + pulse.toFixed(3) + ')';
-    ctx.fillRect(0, 0, W, H);
-  }
-  // 【打击感】受伤红闪：撞击瞬间屏幕边缘淡淡红一下迅速消失（封顶很低，撞多了也不刺眼、绝不顿帧）
-  if(bgTime < hurtFlash){
-    const a = Math.min(0.13, (hurtFlash - bgTime) * 1.4);
-    ctx.fillStyle = 'rgba(255,60,60,' + a.toFixed(3) + ')';
     ctx.fillRect(0, 0, W, H);
   }
   // 【新手】第一局还没跳过：在角色上方飘一条脉动"点屏幕跳！"，跳一下就消失
