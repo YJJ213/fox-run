@@ -864,7 +864,6 @@ function doGraze(o){
   game.bonus += scoreMult();
   juiceVibrate('graze');
   try{ sfx.graze(); }catch(e){}
-  game.shake = Math.max(game.shake, 2);
   floatText(player.x + player.w / 2, player.y - player.h - 8, '险!', '#9fe8ff');
   burst(player.x + player.w / 2, player.y - player.h / 2, 5, ['#9fe8ff', '#ffffff']);
 }
@@ -1192,7 +1191,7 @@ function die(cause){
   game.state = 'dead';
   game.deathBy = cause || 'hit';
   game.deadAt = bgTime;
-  game.shake = 13;
+  game.shake = 6;   // 阵亡：只保留一记很轻的"咚"（一次性终结，不是反复晃屏）
   stopBGM();   // 背景音乐停下，让"游戏结束"旋律独奏
   sfx.die();
   burst(player.x + player.w/2, Math.min(player.y - player.h/2, H - 20), 26, ['#ff9b4b','#ffd34d','#ffffff']);
@@ -1285,7 +1284,6 @@ function stumble(){
   game.penalty += 5;      // 【血条Boss】保留少量扣分（5）作为受伤手感，不再扣 20
   breakCombo();           // 【留存包】① 真正受伤：连击断了（护盾挡住的在上面已 return，不断）
   juiceVibrate('hurt');   // 【留存包】② 痛感震动
-  game.shake = 8;         // 撞障碍：恢复原版纯震屏（不加红闪/顿帧——用户反馈太夸张）
   setFace('hurt', 1.0);   // 痛苦表情
   sfx.hit();
   burst(player.x + player.w / 2, player.y - player.h / 2, 14, ['#ff9b4b', '#ffffff']);
@@ -1304,13 +1302,12 @@ function startChase(){
   chaseRewarded = false;
   nextChaseAt = Math.floor(game.runDist / 12) + 2200 + Math.floor(srand() * 700);   // 下一次更远
   showBanner('🪨 巨石追击！别撞障碍 · 冲过这一段！', 2.4, '#ffb84d');
-  game.shake = Math.max(game.shake, 5);
 }
 // 被巨石追上：休闲模式不秒死，重伤一下并把巨石顶回去一截，给玩家喘息
 function chaseHit(){
   if(bgTime < invulnUntil) return;
   playerHP -= 30; lastHurtAt = bgTime; invulnUntil = bgTime + 1.0;
-  game.shake = 12; breakCombo(); setFace('hurt', 1.0); juiceVibrate('hurt'); sfx.hit();   // 巨石撞击：恢复原版纯震屏（无红闪/顿帧）
+  breakCombo(); setFace('hurt', 1.0); juiceVibrate('hurt'); sfx.hit();   // 巨石撞击：去掉震屏（用户反馈"屏幕一晃一晃"），保留扣血飘字+原地星花
   burst(player.x + player.w / 2, player.y - player.h / 2, 18, ['#9a7b5a', '#c0a080', '#ffffff']);
   floatText(player.x + player.w / 2, player.y - player.h - 16, '巨石撞击 -30 ❤', '#ff5a5a');
   if(playerHP <= 0){ playerHP = 0; die('hit'); }
@@ -1429,7 +1426,6 @@ function bossHurt(dmg){
   game.penalty += 4;
   breakCombo();
   juiceVibrate('hurt');
-  game.shake = 9;
   setFace('hurt', 0.9);
   sfx.hit();
   burst(player.x + player.w / 2, player.y - player.h / 2, 14, ['#ff5a5a', '#ffffff']);
@@ -2336,7 +2332,6 @@ function update(dt){
         if(bgTime < feverUntil) game.bonus += 2 * sm;   // 【留存包】① 狂热时刻：撞碎额外 +2（同样吃 ×3）
         addCombo(); addStat('smash', 1);           // 【留存包】①③ 撞碎续连击 + 累计撞碎数
         juiceVibrate('smash');                     // 【留存包】② 撞碎的"哒"一下
-        game.shake = Math.max(game.shake, 5);
         setFace('joy', 0.5);   // 撞碎东西很爽！
         taskProg('smash', 1);
         sfx.smash();
@@ -2580,7 +2575,6 @@ function update(dt){
       burst(fxX, fxY, 14, ['#ffcaa0', '#ff8a5c', '#ffffff']);   // 撞击星花
       floatText(fxX, fxY - 18, '🐻 +' + (2 * sm), '#ffcaa0');
       petSmashFx = bgTime + 0.35;   // 拳印特效短暂残留
-      game.shake = Math.max(game.shake, 4);
       sfx.smash();
     } else {
       petSmashAt = bgTime + 1;   // 眼前没普通障碍：1 秒后再找（不浪费整个 6 秒冷却）
