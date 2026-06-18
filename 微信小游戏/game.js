@@ -18,8 +18,8 @@ const SPEED_MAX   = 820;       // 速度上限（后期才真正狂飙）
 // 旧版是恒定 +9/秒，45 秒就飙到顶速；现在前 600 米很温柔，3500 米后才是地狱
 function speedRamp(){
   const m = game.runDist / 12;   // 当前里程（米）
-  // 【血条Boss】前段调缓：前 600 米只 +4/秒，新手能慢慢上手；后期顶速仍快
-  return m < 600 ? 4 : m < 1800 ? 7 : m < 3500 ? 11 : 15;
+  // 【可玩性】分段提速：前 300 米温和(+5)让新手上手，300-800 米提速(+8)制造"要加油了"的压力递进，之后渐入狂飙
+  return m < 300 ? 5 : m < 800 ? 8 : m < 1800 ? 11 : m < 3500 ? 13 : 15;
 }
 const SLIDE_DUR = 0.65;        // 【酷跑1】一次下滑持续多久（秒）。期间角色压矮，高处横杆从头顶掠过
 const SLIDE_H   = 18;          // 【酷跑1】滑行时角色的等效高度（正常 h=36，滑行压到 18：碰撞框矮一半）
@@ -468,6 +468,7 @@ const game = {
   newBest: false,
   startBest: 0,        // 本局开始时的最高分（用来判断"破纪录的那一瞬间"）
   milestone: 0,        // 本局已报喜过的整千米数
+  earlyMile: 0,        // 【可玩性】本局已报过的早期里程碑(300/500/750米)档位
   recordShown: false,  // 破纪录横幅本局是否已经放过
   shake: 0,            // 屏幕震动强度（死亡时的"打击感"）
   deathBy: '',         // 这局是怎么结束的：'pit'=掉坑，'hit'=撞死（经典模式）
@@ -514,7 +515,7 @@ let ghostUntil = 0, ghostTotal = 1;         // 防护系：幽灵（穿障无伤
 let scorex3Until = 0, scorex3Total = 1;     // 收益系：分数狂潮（得分 ×3）
 let goldStorm = false;                  // 组合技：冲刺 × 双倍金币 = ⚡黄金风暴
 const items = [];                                   // 场上漂浮的道具
-let distToItem = 2200;      // 还要跑多远出现下一个道具
+let distToItem = 1200;      // 【可玩性】首个道具大幅提前：约第6秒拿到第一个 buff，补齐开局正反馈（原2200≈40秒太晚）
 
 /* —— 【内容扩展】跑酷收集玩法：神秘宝箱 + 字母收集 —— */
 //  ① 神秘宝箱(mysteryBox)：跑道上偶尔出现一个发光宝箱，碰到开箱随机大奖（金币爆发/道具/钻石/表现分）
@@ -533,13 +534,13 @@ function letterCount(){ let n = 0; for(const g of letterGot) if(g) n++; return n
 let bonusUntil = 0;         // 超级奖励时间的截止时刻（吃金币攒出来的福利关）
 let bonusCount = 0;         // 本局进过几次奖励关（决定轮到哪种玩法）
 let bonusKind = 0;          // 本次奖励关玩法：0=大头雨 1=飞天黄金 2=狂暴冲撞
-let nextBonusAt = 50;       // 本局再吃到多少枚金币就进奖励关（第一次 50，之后 +180——奖励关别太频繁，攒出来才珍贵）
+let nextBonusAt = 30;       // 【可玩性】首次奖励关门槛 50→30：新手约35秒就体验第一次高潮，之后 +150（原+180）保留稀缺感
 let reviveCount = 0;        // 本局已复活次数（复活费一次比一次贵：200、400、600……）
 let shieldOn = false;       // 护盾道具：挡一次撞击
 // 【追逐】巨石追击事件：周期触发的高紧张段——撞障碍会让巨石猛逼近，干净跑完这段甩掉它给奖励
 let chaseUntil = 0;         // 本次追击的结束时刻
 let chaseX = -260;          // 巨石"右边缘"的屏幕 x（< player.x 即在身后；追上玩家=撞击）
-let nextChaseAt = 1500;     // 下一次触发追击的里程（米）
+let nextChaseAt = 900;      // 【可玩性】首次巨石追击 1500→900 米：常死在600-1200米的新手也能撞上这个逃命爽点
 let chaseRewarded = true;   // 本次追击的"甩掉奖励"是否已发（初始 true=没在追击）
 const CHASE_CREEP = 11;     // 巨石每秒匀速逼近的像素（基础压力）
 const CHASE_LURCH = 40;     // 追击中每撞一次障碍，巨石额外猛逼近的像素
@@ -1137,7 +1138,7 @@ function startGame(){
   game.newBest = false; game.shake = 0; game.deathBy = '';
   power.type = null;
   obstacles.length = 0; coins.length = 0; particles.length = 0; pits.length = 0;
-  items.length = 0; floats.length = 0; distToItem = 2200;
+  items.length = 0; floats.length = 0; distToItem = 1200;
   // 【内容扩展】收集玩法开局清场：宝箱/字母数组清空、计时器复位、字母进度重置（每局重新集齐）
   boxes.length = 0; distToBox = 1500; boxCount = 0;
   letters.length = 0; distToLetter = 900;
@@ -1147,10 +1148,10 @@ function startGame(){
   jumpHeld = null;
   face.until = 0;
   game.startBest = game.best; game.recordShown = false;
-  bonusUntil = 0; nextBonusAt = 50; reviveCount = 0; shieldOn = false;
-  chaseUntil = 0; chaseX = -260; nextChaseAt = 1500; chaseRewarded = true;   // 【追逐】新一局重置巨石追击
+  bonusUntil = 0; nextBonusAt = 30; reviveCount = 0; shieldOn = false;
+  chaseUntil = 0; chaseX = -260; nextChaseAt = 900; chaseRewarded = true;   // 【追逐】新一局重置巨石追击
   bonusCount = 0; bonusKind = 0; magnetUntil = 0; coinx2Until = 0; goldStorm = false;
-  patQueue = []; nextMeteorAt = 5000; game.milestone = 0; mothUsed = false; slowUntil = 0;
+  patQueue = []; nextMeteorAt = 5000; game.milestone = 0; game.earlyMile = 0; mothUsed = false; slowUntil = 0;
   lastBarX = 0;   // 【酷跑1】新一局清掉上一局的横杆锚点，免得开局贴地币位置错乱
   shrinkUntil = 0; ghostUntil = 0; scorex3Until = 0;   // 【内容扩展】三种新道具计时器开局清零（老局残留不能带进新局）
   bunny = null; distToBunny = 6000 + Math.random() * 4000;
@@ -1300,7 +1301,7 @@ function startChase(){
   chaseUntil = bgTime + 9;
   chaseX = -260;
   chaseRewarded = false;
-  nextChaseAt = Math.floor(game.runDist / 12) + 2200 + Math.floor(srand() * 700);   // 下一次更远
+  nextChaseAt = Math.floor(game.runDist / 12) + 1800 + Math.floor(srand() * 600);   // 下一次更远（循环更紧：原+2200）
   showBanner('🪨 巨石追击！别撞障碍 · 冲过这一段！', 2.4, '#ffb84d');
 }
 // 被巨石追上：休闲模式不秒死，重伤一下并把巨石顶回去一截，给玩家喘息
@@ -1345,7 +1346,7 @@ function startBonus(){
   bonusKind = bonusCount % 3;
   bonusCount++;
   bonusUntil = bgTime + 6;
-  nextBonusAt = game.coinCount + 180;  // 下次门槛从"当前数量"重新起算 +180，奖励关永远不会连环触发、也不会太频繁
+  nextBonusAt = game.coinCount + 150;  // 下次门槛从"当前数量"重新起算 +150，奖励关循环更紧一点但仍不会连环触发
   taskProg('bonus', 1);
   obstacles.length = 0;
   pits.length = 0;
@@ -1800,7 +1801,7 @@ function spawnObstacle(){
   }
   if(!patQueue.length){
     // 抽一个适合当前里程的组合段（前期只抽简单段）
-    const tier = d > 4500 ? 4 : d > 2600 ? 3 : d > 1300 ? 2 : d > 500 ? 1 : 0;   // 【丰富度】4500米后开 tier4 硬核段，中后期持续有新花样
+    const tier = d > 4500 ? 4 : d > 2200 ? 3 : d > 1100 ? 2 : d > 280 ? 1 : 0;   // 【可玩性】解锁前置：约280米(第14秒)进 tier1（滑铲/坑/蹦床），新手第一分钟就能见到跳+滑，不再前500米纯跳石头
     const pool = PATTERNS.filter(p => p.tier <= tier);
     patQueue = pool[Math.floor(srand() * pool.length)].seq.slice();
   }
@@ -2267,7 +2268,7 @@ function update(dt){
 
   // 道具：每隔一段路出现一个（奖励关里不出；【血条Boss】Boss 战里也不出）
   if(!inBonus && !bossMode) distToItem -= move;
-  if(!bossMode && distToItem <= 0){ spawnItem(); distToItem = 2000 + srand() * 1800; }
+  if(!bossMode && distToItem <= 0){ spawnItem(); distToItem = 1600 + srand() * 1400; }
   for(let i = items.length - 1; i >= 0; i--){
     items[i].x -= move;
     if(items[i].x < -40) items.splice(i, 1);
@@ -2671,6 +2672,14 @@ function update(dt){
     showBanner('🏁 ' + mk * 1000 + ' 米！距离分 ×' + (1 + Math.min(5, mk) * 0.1).toFixed(1), 2.2, '#ffd34d');
     burst(player.x + player.w / 2, player.y - player.h - 10, 16, ['#ffd34d', '#ffffff']);
     sfx.power();
+  }
+  // 【可玩性】新手前1000米的小目标：300/500/750米节点报喜，填满"跑半天没盼头"的空窗（只给前5局新玩家，老玩家不刷屏）
+  if((save.runs || 0) <= 5 && game.earlyMile < 3){
+    const EM = [[300, '🏁 300 米 · 热身完成！'], [500, '🏁 500 米 · 难度上来咯'], [750, '🏁 750 米 · 马上破千米！']];
+    while(game.earlyMile < 3 && meters >= EM[game.earlyMile][0]){
+      showBanner(EM[game.earlyMile][1], 1.6, '#9bf6a0');
+      game.earlyMile++;
+    }
   }
   // 破纪录的那一瞬间：金色横幅 + 撒花！（日赛分数独立计算，不影响无尽纪录）
   if(endlessOnly() && !game.recordShown && game.startBest > 0 && game.score > game.startBest){   // 【酷跑2】闯关不弹破纪录
@@ -4280,7 +4289,7 @@ function drawHUD(){
     subLine = ''; subColor = '#c5cede';
   }
   if(subLine){ ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = subColor; hudText(subLine, CX, cY); cY += 19; }
-  if(game.state === 'playing' && endlessOnly() && bgTime >= bonusUntil && nextBonusAt - game.coinCount <= 10){   // 奖励关钩子
+  if(game.state === 'playing' && endlessOnly() && bgTime >= bonusUntil && nextBonusAt - game.coinCount <= 25){   // 奖励关钩子：提前到差25枚就显示倒计时，给"快到了"的紧迫感
     ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = '#ffd34d';
     hudText('再吃 ' + Math.max(1, nextBonusAt - game.coinCount) + ' 枚 → ✨奖励关', CX, cY);
     cY += 18;
