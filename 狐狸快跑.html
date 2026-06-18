@@ -643,8 +643,8 @@ const SPEED_MAX   = 820;       // 速度上限（后期才真正狂飙）
 // 旧版是恒定 +9/秒，45 秒就飙到顶速；现在前 600 米很温柔，3500 米后才是地狱
 function speedRamp(){
   const m = game.runDist / 12;   // 当前里程（米）
-  // 【可玩性】分段提速：前 300 米温和(+5)让新手上手，300-800 米提速(+8)制造"要加油了"的压力递进，之后渐入狂飙
-  return m < 300 ? 5 : m < 800 ? 8 : m < 1800 ? 11 : m < 3500 ? 13 : 15;
+  // 【可玩性】平滑连续加速：从 +4/秒（开局温和不吓新手）顺滑爬到 +15/秒（约3000米封顶），全程无台阶跳变，速度变化自然不突兀
+  return 4 + 11 * Math.min(1, m / 3000);
 }
 const SLIDE_DUR = 0.65;        // 【酷跑1】一次下滑持续多久（秒）。期间角色压矮，高处横杆从头顶掠过
 const SLIDE_H   = 18;          // 【酷跑1】滑行时角色的等效高度（正常 h=36，滑行压到 18：碰撞框矮一半）
@@ -2341,6 +2341,18 @@ function spawnPatternCoins(kind, refX){
     }
   }
 }
+// 【可玩性】把里程映射成连续的"丰富度档位"(0..4)，锚点 0/280/1100/2200/4500 米线性插值——配合下面 frac² 概率渐入，让障碍花样平滑变多，而不是到某米数整档突然全换
+function tierFloat(d){
+  const pts = [[0, 0], [280, 1], [1100, 2], [2200, 3], [4500, 4]];
+  if(d >= 4500) return 4;
+  for(let i = 1; i < pts.length; i++){
+    if(d < pts[i][0]){
+      const a = pts[i - 1], b = pts[i];
+      return a[1] + (b[1] - a[1]) * (d - a[0]) / (b[0] - a[0]);
+    }
+  }
+  return 4;
+}
 function spawnObstacle(){
   const d = game.runDist / 12;   // 米
   // 新手教学坑（前 3 个）：窄坑 + 预警，独立于编排系统
@@ -2352,7 +2364,9 @@ function spawnObstacle(){
   }
   if(!patQueue.length){
     // 抽一个适合当前里程的组合段（前期只抽简单段）
-    const tier = d > 4500 ? 4 : d > 2200 ? 3 : d > 1100 ? 2 : d > 280 ? 1 : 0;   // 【可玩性】解锁前置：约280米(第14秒)进 tier1（滑铲/坑/蹦床），新手第一分钟就能见到跳+滑，不再前500米纯跳石头
+    const tf = tierFloat(d);
+    let tier = Math.floor(tf);
+    if(tier < 4 && srand() < (tf - tier) * (tf - tier)) tier++;   // 【可玩性】软过渡：越接近下一档边界，越常掺入高一档的段（frac² 让早期只偶尔预览、不突兀拔高），到点不再障碍整档突然全换/变难。档位锚点：280米滑铲/坑/蹦床、1100米火焰/锯/激光、2200米更密、4500米硬核
     const pool = PATTERNS.filter(p => p.tier <= tier);
     patQueue = pool[Math.floor(srand() * pool.length)].seq.slice();
   }
