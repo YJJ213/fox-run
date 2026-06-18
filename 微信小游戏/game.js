@@ -1192,7 +1192,7 @@ function die(cause){
   game.state = 'dead';
   game.deathBy = cause || 'hit';
   game.deadAt = bgTime;
-  game.shake = 6;   // 阵亡：只保留一记很轻的"咚"（一次性终结，不是反复晃屏）
+  game.shake = 0;   // 全局零震屏：用户对晃屏极敏感，连阵亡也不晃（game.shake 机制至此全程为0，render 的平移永不触发）
   stopBGM();   // 背景音乐停下，让"游戏结束"旋律独奏
   sfx.die();
   burst(player.x + player.w/2, Math.min(player.y - player.h/2, H - 20), 26, ['#ff9b4b','#ffd34d','#ffffff']);
@@ -1287,7 +1287,7 @@ function stumble(){
   juiceVibrate('hurt');   // 【留存包】② 痛感震动
   setFace('hurt', 1.0);   // 痛苦表情
   sfx.hit();
-  burst(player.x + player.w / 2, player.y - player.h / 2, 14, ['#ff9b4b', '#ffffff']);
+  // 撞击不再放星花特效（用户要最干净、撞击不要任何特效）——只留扣血数字+音效
   floatText(player.x + player.w / 2, player.y - player.h - 16, '-22 ❤', '#ff5a5a');   // 【血条Boss】红色掉血飘字
   if(playerHP <= 0){ playerHP = 0; die('hit'); }   // 【血条Boss】血空才死（掉坑仍走 die('pit') 秒死，不经这里）
 }
@@ -1309,7 +1309,7 @@ function chaseHit(){
   if(bgTime < invulnUntil) return;
   playerHP -= 30; lastHurtAt = bgTime; invulnUntil = bgTime + 1.0;
   breakCombo(); setFace('hurt', 1.0); juiceVibrate('hurt'); sfx.hit();   // 巨石撞击：去掉震屏（用户反馈"屏幕一晃一晃"），保留扣血飘字+原地星花
-  burst(player.x + player.w / 2, player.y - player.h / 2, 18, ['#9a7b5a', '#c0a080', '#ffffff']);
+  // 巨石撞击不再放星花特效（同上：撞击只留扣血数字+音效）
   floatText(player.x + player.w / 2, player.y - player.h - 16, '巨石撞击 -30 ❤', '#ff5a5a');
   if(playerHP <= 0){ playerHP = 0; die('hit'); }
 }
@@ -1429,7 +1429,7 @@ function bossHurt(dmg){
   juiceVibrate('hurt');
   setFace('hurt', 0.9);
   sfx.hit();
-  burst(player.x + player.w / 2, player.y - player.h / 2, 14, ['#ff5a5a', '#ffffff']);
+  // Boss 打到不再放星花特效（同上：撞击只留扣血数字+音效）
   floatText(player.x + player.w / 2, player.y - player.h - 16, '-' + dmg + ' ❤', '#ff5a5a');
   if(playerHP <= 0){ playerHP = 0; die('hit'); }   // 被 Boss 打空血照样死
 }
