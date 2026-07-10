@@ -1,0 +1,639 @@
+{
+ "audits": [
+  {
+   "dimension": "角色动画表现",
+   "findings": [
+    {
+     "title": "奔跑循环只有两条腿正弦摆动，躯干/头/耳朵完全刚性，没有跑步起伏感",
+     "gap": "drawCharacter 的 legs()/leg()(网页版 4460-4469 行, game.js 3909-3918 行)是全部奔跑动画：两个胶囊形小腿各自 rotate(sin(p.phase)*0.6*0.7)，一根单段直腿无膝盖。躯干在 drawPlayer 里 translate 到 p.y(奔跑时恒等于 GROUND_Y)，没有任何随步伐的上下颠簸(bob)；耳朵是固定坐标三角形(如狐狸 4569-4572 行 tri)全程静止；只有尾巴 wag 和围巾 scarfTails 在动。整只角色跑起来像'贴在传送带上的贴纸下面伸出两根摆动的小棍'。",
+     "benchmark": "天天酷跑角色是 6-8 帧骨骼感奔跑循环：躯干每一步有明显的上下起伏和微前倾，腿有抬膝-蹬伸-触地的分段姿态，头发/耳朵/饰品作为次级动画跟随躯干起伏做延迟摆动(follow-through)，这是'高级感'的最大来源。",
+     "fix": "三处小改，全在现有绘制函数内：1) drawPlayer 的 ctx.translate 里给奔跑态加 bob = -Math.abs(Math.sin(p.phase))*3 的 Y 偏移(纯视觉不动碰撞框)，并加 rotate(Math.sin(p.phase*2)*0.02) 的微晃；2) leg() 改两段式：大腿 rotate(sw*0.7) 后再 save/translate 到膝盖处 rotate(-Math.max(0,sw)*0.5) 画小腿，立刻有'抬膝'感；3) 各角色的耳朵 tri 前包一层 save/translate/rotate(Math.sin(p.phase+1.5)*0.08)，让耳朵随步伐颤动。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "空中只有一个僵硬固定姿势：上升/下落/二段跳共用同一姿态，身体不随抛物线倾斜",
+     "gap": "腿角在空中是写死的常量：leg(-12, grounded? swing : -0.5) / leg(6, grounded? -swing : 0.7)(网页版 4462-4463, game.js 3911-3912)——起跳到落地全程一个 pose。身体旋转只在 sliding(+0.35)和 gliding(-0.12)时有(4406-4407)，普通跳跃的整条抛物线里角色是水平直挺挺的。tickPlayerCosmetics 的 squash 目标值仅 ±0.12/0.08(3361 行)且靠 lerp 缓慢到达，肉眼几乎不可见。",
+     "benchmark": "天天酷跑起跳收腿团身、滞空顶点姿态舒展、下落时身体前倾伸腿准备着地，二段跳做一个 360° 空翻——空翻是跑酷品类的标志性'爽点动作'，成本极低但记忆度极高。",
+     "fix": "在 drawPlayer 里加两行：1) 空中 rotate(clamp(p.vy/1600,-0.15,0.18))，让身体随升降自然俯仰；2) 腿角改为随 vy 插值：const k=clamp((p.vy+820)/1640,0,1); leg 角用 lerp(-0.9,-0.2,k) / lerp(-0.2,0.9,k)，上升收腿、下落伸腿。3) 二段跳(p.jumpsUsed>=2 且未落地)时记录 flipStart=bgTime，0.45 秒内 rotate(progress*TAU) 做一个前空翻(纯本体旋转，不违反震屏铁律)。",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "squash&stretch 缺起跳瞬间冲击和落地回弹过冲，弹性感只做了一半",
+     "gap": "起跳处(3300-3309 行, game.js 2749 附近)完全没碰 p.squash——拉伸只靠 tickPlayerCosmetics 里 lerp 慢慢逼近 -0.12，等拉伸出来跳跃已过半程，'蹬地爆发'的那一帧没有任何形变。落地 p.squash=0.3(3323 行)后按 dt*10 单向指数衰减(3362 行)直接归零，没有回弹过冲(overshoot)，压扁完就'泄气'了。",
+     "benchmark": "商业跑酷的经典做法：起跳帧瞬时纵向拉长约 1.2-1.3 倍(anticipation 的爆发感)，落地压扁后弹回时会超过原始尺寸再稳住(弹簧欠阻尼)，一压一弹才是'Q 弹'的来源。",
+     "fix": "两处各一行 + 弹簧化：1) 起跳成功处(3302 行后)加 p.squash = -0.35；2) tickPlayerCosmetics 把单向 lerp 换成带速度的弹簧：p.squashV += (target-p.squash)*260*dt; p.squashV *= Math.pow(0.0015,dt); p.squash += p.squashV*dt——欠阻尼自动产生落地回弹过冲，起跳/落地两头都变弹。player 对象加一个 squashV:0 字段即可(1523 行)。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "死亡瞬间全画面冻结，角色僵在原地换个 X 眼——空中死亡就直接挂在天上",
+     "gap": "die()(1735-1767 行, game.js 1183 附近)只发一次粒子 burst；update 的 dead 分支(2724-2728 行)只更新粒子，player 位置/姿态完全冻结；drawCharacter 里死亡表现仅 eye() 画 XX 眼(4483-4488 行)。若在跳跃中撞死，狐狸就以奔跑姿势悬浮在半空定格，配上 X 眼，观感非常出戏——这是玩家每局必看一次的画面。",
+     "benchmark": "天天酷跑死亡是标志性的'向后抛物线翻滚'：角色被击飞弹起、空中旋转、砸回地面弹一下、扬起尘土，然后才浮现结算——把失败也做成了一个有戏剧性的小动画。",
+     "fix": "完全符合'只允许局部特效'铁律(动的是角色本体，不动镜头)：die() 里设 p.vy=-420、p.deadSpin=0；update 的 dead 分支加约 6 行：撞死(hit)时 p.vy+=GRAVITY*dt; p.y=Math.min(GROUND_Y,p.y+p.vy*dt); p.deadSpin+=8*dt(封顶一圈半)，触地时 p.vy*=-0.35 弹一下并 puff 扬尘；掉坑死(pit)则继续下坠出屏。drawPlayer 在 dead 时 rotate(p.deadSpin)。死亡卡已有 0.6 秒延迟(6081 行 showDead)，正好给这段动画留了舞台。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "滑铲是'整只角色被压扁'而不是滑铲姿势，腿还在原地跑步",
+     "gap": "滑铲实现于 drawPlayer 4404-4406 行(game.js 3853 附近)：对同一个站立造型做非均匀 scale(1.18, 0.55) 再 rotate(0.35)。压扁时五官/身体比例整体变形，且 sliding 时 grounded 为真，legs() 的两条腿仍在做奔跑摆动——一个被压瘪还在跑步的角色，读作'被门夹了'而不是'帅气滑铲'。滑铲期间也没有持续的地面摩擦尘土。",
+     "benchmark": "天天酷跑滑铲是专门姿势：身体后仰贴地、前腿伸直蹬出、单手撑地，脚跟拖出连续的尘土/火花拖尾，是玩家使用频率最高的动作之一。",
+     "fix": "drawCharacter 增加 o.sliding 参数：sliding 时 legs() 不用 swing 而是画固定伸展姿势(前腿 leg(6, 1.1) 伸直、后腿 leg(-12, -0.2) 收拢)，尾巴角度抬高；drawPlayer 把 slideY 从 0.55 放宽到 0.7、slideX 回到 1.05，形变减轻靠姿势补足'低趴'感；滑铲期间借用现有 dustT 机制把 puff 频率加倍并移到脚跟位置(3350-3351 行旁加 if(p.sliding) 分支)。",
+     "impact": "medium",
+     "effort": "medium"
+    },
+    {
+     "title": "宠物是一枚静止 emoji 字符硬绑在固定偏移上飘，无跟随感无生命感",
+     "gap": "drawPet(4293-4318 行, game.js 3742-3767 行)：ctx.fillText(ap.emoji) 一个 20px 文字 + sin(bgTime*4)*4 上下浮动，位置写死 p.x-22 / p.y-p.h-22——主人起跳它同帧瞬移跟上，主人滑铲/死亡它毫无反应，永远保持同一朝向同一大小。技能触发也只是在旁边画个圈，宠物本体不动。",
+     "benchmark": "天天酷跑宠物有独立的扇翅/奔跑动画循环，用弹性跟随(滞后 0.1-0.2 秒追赶主人轨迹)制造'活物在追着你飞'的感觉，技能触发时宠物本体有俯冲/发光/放大等专属动作。",
+     "fix": "不画帧也能救活它，约 8 行：1) 弹性跟随——加全局 petPos={x,y}，每帧 petPos.x+=(targetX-petPos.x)*Math.min(1,dt*5)(y 同理)，主人跳跃时宠物画出滞后弧线；2) 本体动画——fillText 前 rotate(Math.sin(bgTime*9)*0.1) 摇摆 + scale(1+Math.sin(bgTime*7)*0.05) 呼吸；3) 技能触发瞬间(petPulseUntil/petSmashFx 已有时间戳)本体 scale 弹到 1.4 再回落；4) 主人死亡时宠物停止浮动、贴到主人身边(利用 dead 状态判断)。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "非致死受击只有透明度闪烁+表情，身体没有任何踉跄/受击姿态",
+     "gap": "受击表现 = invulnUntil 期间 globalAlpha 按 sin(bgTime*30) 闪烁(4397-4399 行, game.js 3846 附近) + face='hurt' 的挤眼冷汗表情(4489-4500 行)。角色躯干姿态零变化——奔跑动作丝毫不乱，只是人变半透明，'撞到东西'的物理感全靠玩家脑补。",
+     "benchmark": "天天酷跑受击有明显的踉跄顿姿：身体后仰一拍再回正，头顶绕圈小星星，配合表情——全是角色本体上的局部反馈，不需要震屏/顿帧。",
+     "fix": "完全在铁律允许范围内(局部特效)：1) 记录 lastHurtAt(已存在，2771 行在用)，drawPlayer 里 if(bgTime-lastHurtAt<0.35) rotate(-0.22*(1-(bgTime-lastHurtAt)/0.35)) 做一个后仰回正；2) 同窗口内在头顶用现成的 sparkle()(4525 行)画 3 颗绕圈星星：角度 = bgTime*10 + i*2.1，半径 16；3) 顺手把闪烁频率从 sin(bgTime*30) 降到 *18，30rad/s 的闪烁在 60fps 下有明显的频闪脏感。",
+     "impact": "medium",
+     "effort": "small"
+    }
+   ]
+  },
+  {
+   "dimension": "游戏画面特效",
+   "findings": [
+    {
+     "title": "全游戏粒子只有一种形态:小方块,所有事件的爆花长得一模一样",
+     "gap": "drawParticles(html约4758行/game.js约4207行)对每个粒子只做 fillRect 画正方形;burst/puff(约2099-2120行)生成的粒子除了颜色没有任何区别。吃金币、撞障碍星花、护盾破碎、复活光、开箱、死亡、千米撒花……26处 burst 调用全是同款方块雨,玩家分不出事件轻重,画面显得像早期像素demo。",
+     "benchmark": "天天酷跑的粒子分好几套形态:金币是圆形光点带辉光、撞击是放射状星形火花、变身是环形冲击波+光柱,关键粒子用加法混合(发光叠加)让亮色真的'亮'。同一套粒子系统靠形态+混合模式拉开档次感。",
+     "fix": "给粒子对象加 shape 字段,drawParticles 里按 shape 分支:circle=径向渐变圆点、star=4角星(两个旋转45度的细菱形)、spark=沿速度方向拉长的细条、ring=一次性扩散圆环(半径随life变大、线宽变细)。关键爆点(吃币/开箱/破纪录)整段用 ctx.globalCompositeOperation='lighter' 画,画完还原。burst 加第5参shape,现有26处调用按事件分配形态:金币→circle+star、撞击→spark、开箱/破纪录→ring+star。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "吃金币没有『飞向计数器+计数器弹跳』,金币是原地消失的",
+     "gap": "金币碰撞处理(html约3168-3204行)碰到就 coins.splice 原地消失,只留6粒方块+一行'+5分'飘字;HUD的金币数('🪙 '+save.coins,约4795行)是纯静态文本,数字变了毫无表现。吃币这个每局发生几百次的核心动作,反馈停在'消失'级别。",
+     "benchmark": "天天酷跑金币被吃后会有一枚亮色小币沿弧线飞向左上角计数器,到达瞬间计数器图标+数字放大回弹一下,数字才+1。这条'金币→计数器'的视觉闭环是跑酷游戏爽感的标配,玩家潜意识里感到'钱真的进账了'。",
+     "fix": "新增 flyCoins 数组:吃币时 push {起点x/y, t:0},每帧向HUD金币行坐标(LX,36附近)做二次贝塞尔插值(控制点抬高使其走弧线),0.3秒到达时才让'显示用金币数'+1并记 coinPopT=bgTime;drawHUD 画金币行时用 scale=1+0.35*max(0,1-(bgTime-coinPopT)/0.15) 做弹跳。逻辑数值照旧立即入账,只延迟'显示值',不影响任何规则。飞行小币直接复用 drawCoins 的画法缩小版。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "道具激活瞬间没有任何变身特效,巨大化/缩小是一帧瞬切",
+     "gap": "activatePower(html约2570-2629行)十种道具的激活表现全是同一套:floatText一行字+setFace表情+sfx.power音效,连个爆花都没有(捡道具那下的burst是在道具原位置,不在角色身上)。更糙的是 drawPlayer 里 gs=(power.type==='giant')?1.6:1(约4402行)、shrinkS=0.6(约4378行)——体型一帧内从1跳到1.6/0.6,像贴图换错了而不是'变身'。",
+     "benchmark": "天天酷跑吃到变身道具:角色白光一闪、脚下升起光柱、一圈冲击光环扩散、体型用0.2-0.3秒弹性过渡到目标大小,持续期身上还挂光环。'变身瞬间'是它最舍得砸表现的时刻,因为这是玩家的高光帧。",
+     "fix": "①激活时记 powerFlashT=bgTime 和颜色;drawPlayer 末尾若 bgTime-powerFlashT<0.4,用 lighter 混合画两圈从角色中心扩散的圆环(半径0→70,alpha衰减)+角色位置一个短暂径向渐变亮斑。②giant/shrink 的比例改成补间:全局 gsCur += (目标-gsCur)*min(1,dt*12),drawPlayer 用 gsCur;目标从1.6略过冲到1.75再回落更弹。碰撞框逻辑照旧瞬切不用动,只改视觉比例。",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "磁铁/双倍/狂潮等持续型增益在角色身上零特效,金币被吸也无拖尾",
+     "gap": "磁铁生效期(html约3098-3121行)只是每帧给 coins 的 x/y 做直线位移,画面上角色周围什么都没有,金币直挺挺滑过来;coinx2/scorex3/slow/ghost 持续期同样只有左栏一根9px小进度条。玩家吃了道具后经常'忘了自己开着磁铁',因为看不见。护盾好歹有个圈,其他全裸。",
+     "benchmark": "天天酷跑磁铁期角色周围有旋转的磁力光环/电弧,被吸的金币拖着金色光尾划弧飞进角色;双倍/狂潮类增益角色脚下有持续光圈或身上换色调。原则是:凡持续型buff,角色本体必须有一眼可见的持续标识。",
+     "fix": "①磁铁期在 drawPlayer 后画两条旋转虚线弧(ctx.setLineDash+以bgTime转角度,半径呼吸60-70px,青/红色),成本极低;②磁吸循环里,对每枚正在被吸的金币按约0.05秒间隔往 charTrail push 一个金色光点(复用现成拖尾结构),自然形成弧线金尾;③coinx2/scorex3 期在角色脚底画一个椭圆淡金光圈(径向渐变,alpha随sin呼吸);④ghost已有残影够用,slow可给全屏边缘一圈淡蓝(见滤镜条)。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "狂热Fever=一层静态橙滤镜+横幅,角色本体毫无燃烧感",
+     "gap": "狂热触发(html约1325-1329行)只弹横幅;持续中的全部画面表现=全屏铺0.10透明度橙矩形(约5042-5044行)+连击字变金+一根90px小倒计时条(约4874-4879行)。号称'狂热时刻'的高潮状态,角色跟平时跑得一模一样,爽感全靠玩家脑补。",
+     "benchmark": "天天酷跑冲刺/无敌狂热态:角色全身裹火焰特效、身后拖出加宽加亮的炫光尾迹、屏幕四边有火焰色边缘光呼吸,一眼就知道'现在是爆发期'。高潮状态的画面能量要肉眼可见地上一个台阶。",
+     "fix": "全部在铁律允许范围内(无位移无闪屏):①fever期 updateTrail 的发射量翻倍且颜色强制暖色系['#ff8a5c','#ffd34d','#fff'],size上限调大→尾迹立刻变成火尾;②把全屏平铺橙矩形换成四边内发光vignette(4条linearGradient从边缘橙色渐到透明,宽约60px,alpha随sin呼吸),中心画面不再蒙灰;③角色头顶画一簇2-3个小火苗粒子(每0.1秒发射,向上飘,复用粒子系统)。",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "连击数字没有逐次弹跳,只会随总数缓慢变大",
+     "gap": "连击HUD(html约4867-4873行)字号=15*min(1.5,1+combo/100),从x5连到x50字号才涨几像素,每次+1连击画面纹丝不动;addCombo(约1321行)也不记任何用于表现的时间戳。连击是这游戏留存包的核心爽点,却是全HUD最死板的元素。",
+     "benchmark": "天天酷跑及几乎所有商业游戏的combo计数:每次+1数字先放大到1.3-1.5倍再弹回(ease-out back),连击到阈值段位时换颜色/加光效。'数字在跳'本身就是节奏反馈。",
+     "fix": "addCombo() 里加 comboPopT=bgTime;drawHUD 画连击时 s=1+0.45*max(0,1-(bgTime-comboPopT)/0.18),用 ctx.save+translate(CX,cY)+scale(s,s) 包住 hudText;再按 combo 档位换填色(5白/20金/50橙红),接近fever阈值时轻微脉动预告'快狂热了'。约15行代码。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "飘字全是恒速匀飘的15px小字,无弹出动画、无描边",
+     "gap": "floatText/floats(html约2121-2138行、绘制约4764-4771行):固定15px、恒速34px/s上飘、线性淡出、无描边——'+5分'和'护盾抵挡!'和'险!'节奏字号完全相同。HUD文字都知道先描边再填色(4780-4782行),飘字却裸画,在亮色天空段落几乎看不清。",
+     "benchmark": "商业游戏飘字三段式:0.1秒内从0急速放大过冲弹出→短暂悬停→再上飘淡出;重要飘字(暴击/道具名)字号翻倍+描边+专属色。飘字的'弹'是打击反馈里最便宜又最显质感的一环。",
+     "fix": "floats 元素加 size 可选参数(默认15,道具名/护盾抵挡传20-22);绘制时前0.12秒用 easeOutBack 缩放(scale从0.3过冲到1.15回1,translate+scale实现),并统一加 lineWidth 3 黑描边(strokeText后fillText,照抄hudText写法);y速度改成先慢后快。约20行。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "速度感天花板低:视差只有云+两层山,没有前景层,冲刺时没有速度线",
+     "gap": "drawBackground(html约3451-3499行)纵深结构=星/云+远山(0.18)+近山(0.4)+地面石子,全部在角色身后,没有任何画在角色前面的前景遮挡层;全文搜不到速度线相关代码——开局冲刺2.2倍速和平时跑,除了东西移动快点,画面语言完全一样。",
+     "benchmark": "天天酷跑跑道有4-6层视差,包括一层贴近镜头、以超过地面速度掠过的前景(栏杆/草丛/花),前景遮挡是纵深感的一半来源;加速/冲刺状态屏幕两侧还会出现半透明放射速度线,速度是'画出来的'不只是'移出来的'。",
+     "fix": "①加前景层:GROUND_Y+30 以下画一排随机草簇/小石堆(初始化时生成一组{x,type},以 game.dist*1.25 滚动,画在 drawPlayer 之后、HUD之前,半透明深色剪影即可,注意别遮角色脚以上);②速度线:当 dash/boost 或 fever 时,维护6-8条{y,len,speed,alpha}的水平白细线从右往左扫过(lineWidth 1-2,alpha约0.22,速度2-3倍于地面),纯水平移动不属于震屏。两招加起来冲刺段的'快'会质变。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "角色拖尾是断续圆点串,不是连续光带,低速像在漏油",
+     "gap": "updateTrail/drawTrail(html约2143-2179行)每28ms吐1-2个独立径向渐变圆点,向左飘0.35-0.55秒消失。点与点间距随速度拉开,普通速度下能数出一个个圆点,视觉上是'滴落物'不是'尾迹';且普通混合模式叠不出光感。",
+     "benchmark": "天天酷跑的奔跑尾迹是连续的绸带状光带:沿角色历史轨迹画连续几何带,宽度从身体处向尾端收窄、透明度衰减,加法混合发光,跳跃时尾迹跟着划出弧线,是角色华丽感的主要来源。",
+     "fix": "保留现有粒子点作点缀,另加绸带:每帧把角色锚点(x, y-h*0.5)存入 posHist(上限12点,间隔约16ms);drawTrail 里从最老点到最新点画折线(quadraticCurveTo取中点平滑),分3-4段stroke,lineWidth从9收到1、alpha从0.05升到0.4,颜色用角色 trail 色,包在 globalCompositeOperation='lighter' 里。跳跃/滑翔时绸带自动划弧,冲刺时把宽度和alpha乘1.5。",
+     "impact": "medium",
+     "effort": "medium"
+    },
+    {
+     "title": "四种全屏状态滤镜都是平铺纯色矩形,叠加时画面发灰、主角也被蒙暗",
+     "gap": "render末段(html约5030-5051行):Boss战=全屏0.10-0.15暗红、奖励关=全屏0.12金、fever=全屏0.10橙、分数狂潮=全屏0.06-0.11金脉动,四个 fillRect(0,0,W,H) 直接盖在包括角色在内的整个画面上。状态一叠加(奖励关里触发fever很常见)整屏蒙两层色浆,对比度掉一截,角色主体跟着发闷。",
+     "benchmark": "商业游戏的状态染色几乎都用边缘渐晕(vignette):颜色只压在屏幕四周,中心10-70%区域保持完全通透,主角和障碍永远清晰;强度靠边缘宽度和呼吸脉动传达,不牺牲可读性。",
+     "fix": "写一个 edgeGlow(color,alpha,width) 工具:四条 linearGradient(边缘color→内侧透明)矩形,替换现有四处全屏fillRect(Boss红/奖励金/fever橙/狂潮金各调一次,fever那处与发现5共用);Boss战的危机脉动改成边缘红呼吸。多状态叠加时各自占边缘不同宽度,中心始终干净。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "护盾只是一根3px细线圆圈,破盾也只是一撮蓝方块",
+     "gap": "护盾持续中(html约4420-4425行)=一个 strokeStyle 蓝色、lineWidth 3 的正圆,呼吸只靠alpha,像用圆规画的辅助线;破盾时(约1823-1828行)burst 16粒蓝方块+'护盾抵挡!'飘字,'一个罩子碎掉'的戏剧感完全没做出来。",
+     "benchmark": "天天酷跑的护盾是半透明能量泡:有体积感的渐变填充、顶部高光弧、表面缓慢流转的纹路;被击破瞬间泡体沿圆周炸成碎片飞散+一圈扩散冲击环,'替你挡了一下'的价值感很足。",
+     "fix": "①持续态:径向渐变填充(中心透明→边缘rgba(140,200,255,0.25))的圆+现有描边+左上一条高光短弧+两条以bgTime旋转的setLineDash弧线;②破盾:沿圆周均匀取10个点,每点发射一个沿切线方向飞出的spark粒子(配合发现1的形态)+一个从盾半径向外扩散的ring,替换现在的普通burst。全程局部特效,符合铁律。",
+     "impact": "medium",
+     "effort": "small"
+    }
+   ]
+  },
+  {
+   "dimension": "UI界面动效与流程",
+   "findings": [
+    {
+     "title": "小游戏版所有按钮按下去没有任何视觉反应,像点在死图片上",
+     "gap": "game.js uiBtn()(约4728-4771行)只画静态按钮;触摸层 UI.touchStart(6314行)已经把按中的按钮存进 uiTouch.pendId 了,但绘制时完全没用它——手指按住按钮期间按钮纹丝不动,抬手才突然生效。网页版也只有 homeStart/homeRow/signClaim/shop-row 少数按钮有 :active 下沉(HTML 128/135/439/450/468行),关闭键、页签、天赋升级键等都没有。",
+     "benchmark": "天天酷跑等商业游戏所有可点元素按下瞬间就有反馈:缩放到约0.95、变暗或下沉2-4px,抬手回弹。这是玩家判断'我点到了没'的第一信号,缺了就是最直接的'糙'感来源。",
+     "fix": "uiBtn 里加一行判断:const pressed = uiTouch.on && uiTouch.pendId === o.id; 为真时把 x/y/w/h 往中心缩3%(或整体 y+h*0.05 下沉)、base 色 shade(base,-0.12)、去掉投影(shadowBlur 减半)。按钮每帧重画,天然支持这种状态切换,十几行代码全局生效。网页版补一条通配 CSS: #shop button:active, .tRow button:active 等 { transform: scale(0.96); filter: brightness(0.9); }",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "全游戏没有一个UI点击音效,按钮全是哑巴",
+     "gap": "grep 全文 sfx 调用:只有购买成功 sfx.power()/sfx.coin()(4942-4961、4972行等),touchStart/touchEnd(6314/6357行)执行按钮回调前后没有任何声音;juiceVibrate(855行)也只用于游戏内撞击/抓兔,UI层零触感。翻页签、开弹窗、关弹窗、点开始,全程无声。",
+     "benchmark": "商业手游每个按钮都有短促'嗒/叮'声(50-80ms正弦或方波),重要按钮(开始游戏、领奖)配 wx.vibrateShort({type:'light'})。声音+触感是'高级感'里权重极高又极便宜的一环。",
+     "fix": "sfx 对象里加一个 sfx.tap()(现有 Web Audio 合成器照抄 coin 的写法,频率调高、时长砍到0.05s、音量0.15);在 UI.touchEnd 命中 z.cb() 之前统一播 sfx.tap(),开始/领取/购买这几个 id 额外 juiceVibrate('ui')。一处改动覆盖全部按钮。",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "所有弹窗和页面切换都是硬弹硬切,没有一帧过渡",
+     "gap": "界面状态机是裸字符串赋值:uiScreen='adventure'/'sign'/'talent'(5417/5433/5436行)下一帧整卡满状态直出;uiDrawShop/uiDrawSign/uiDrawDead/uiDrawPauseMenu 全部第一帧就画完整遮罩+卡片。结算卡注释写着'0.6秒后浮上来'(6438行)其实只是延时,到点还是硬弹。网页版同样,全部靠 .hidden{display:none} 开关(HTML 67/184/253/371行),全项目唯一的 keyframes 是 giftGlow(143行)。唯一像样的过渡是开局的像素块合拢(drawLoading,4600行)——恰好证明架构做得出过渡,只是弹窗都没做。",
+     "benchmark": "天天酷跑弹窗标配:遮罩0.15s淡入,卡片0.2-0.25s从92%缩放+轻微过冲(easeOutBack)弹到100%,关闭反向0.15s。结算卡是从下往上滑入。这层'呼吸感'是玩家分辨大厂和个人作品的最大单一因素。",
+     "fix": "加一个全局 let uiScreenAt=0,所有改 uiScreen 的地方顺手 uiScreenAt=performance.now()(可包一个 gotoScreen(s) 函数);uiCard 开头算 k=easeOutBack(clamp((now-uiScreenAt)/200,0,1)),对遮罩 alpha 乘 k、对卡片 ctx.translate(中心)+ctx.scale(0.92+0.08k) —— 但因为按钮坐标要跟着变,更省事的做法是整卡内容照常画、外层把整个弹窗绘制包进 ctx 变换里,同时过渡期(<200ms)UI.zones 不登记(已有'过场屏蔽按钮'先例,6450行)。结算卡额外给 cardY 加 (1-k)*ch*0.06 的上浮。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "结算卡分数直接印出来,不滚动跳字;闯关星星不逐颗弹出",
+     "gap": "uiDrawDead 6118行 dText(deadCard.score,...) 一次性画出最终分;闯关三星是拼好的字符串 '★★☆'(5214行 deadCard.score='★'.repeat(...)),三颗星同一帧静态出现,连星星大小都和普通文字一样。",
+     "benchmark": "商业跑酷结算是仪式感重头戏:分数从0滚到最终值(0.6-1s,ease-out,伴随快速tick音),破纪录时数字冲过旧纪录那刻爆一下;星星逐颗砸下来(间隔0.25s,每颗带缩放过冲+音效),二星三星的成就感完全靠这个演出撑。",
+     "fix": "showDeadCard 时记 deadCard.shownAt=performance.now();uiDrawDead 里分数行改画 Math.floor(finalScore*easeOutCubic(min(1,(now-shownAt-300)/900))),每涨一截播一声极短 tick(节流到每80ms一次);星星单独画:第i颗在 shownAt+400+i*250 后出现,出现头120ms用 scale 2→1 的缩放画大号'★'+一声 sfx.power 变调。全在现有绘制函数内改,不动布局。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "金币/钻石数字永远瞬间跳变,没有滚动也没有飞币",
+     "gap": "主页钱包胶囊 moneyCap('💰 '+save.coins)(5297行)、商店标题栏余额(uiDrawShop 内 '💰 '+save.coins)都直读存档值:抽奖-150、领礼包+200、买角色-1200,数字都是帧间突变,胶囊本身毫无反应。也没有任何金币从按钮飞向钱包的动画。",
+     "benchmark": "天天酷跑钱包数字永远是'追赶式'滚动(显示值向真实值指数逼近,约0.5s到位),数额变化瞬间胶囊会闪一下金光/轻微放大;领奖时还有5-8枚金币从奖励处抛物线飞进钱包,到账一声叮。玩家对'钱进了口袋'的实感全靠这个。",
+     "fix": "加两个显示用变量 dispCoins/dispGems,每帧 dispCoins+=(save.coins-dispCoins)*0.15(差值<1时贴齐),moneyCap 画 Math.round(dispCoins);变化发生时记 coinFlashUntil=now+300,胶囊描边 alpha 和字号在这300ms内乘 1+0.1*sin 脉冲。飞币进阶版:领奖点已知坐标,往胶囊坐标发5个粒子(现有 burst 粒子系统可复用思路),到达时才把 dispCoins 的目标放行。基础版一天内可完成。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "主页上领礼包/签到的奖励横幅根本显示不出来,奖励反馈直接丢失",
+     "gap": "claimGift(937行)领完调 showBanner('🎁 回归礼包:+500💰...')(944行),但 banner 只在 render() 的游戏HUD里画(4352-4358行),而主循环 6430行 if(!homeOpen()) render() ——主页时 render 整个被跳过。也就是玩家在主页点'领取礼包'/在签到页领奖,唯一反馈是左上角数字悄悄变了,承诺给用户的'当场发钱+横幅'(5322行注释)实际是空头支票。",
+     "benchmark": "商业游戏领奖必有当场演出:奖励弹窗或至少一条居中飘出的金色横幅+音效,让玩家确认'到手了'。奖励发了却看不见,等于白发——留存钩子(明日礼包/签到)的强化效果大打折扣。",
+     "fix": "把横幅从游戏HUD里解耦:frame() 末尾(所有UI画完后)加一段设备坐标系的横幅绘制,改用 performance.now 计时(banner.untilMs),游戏内和主页共用;或者最省事——uiDrawHome 末尾检查 banner 未过期就居中画一行带淡入淡出的大字。顺手给领取时加 sfx.coin+胶囊闪光(联动上一条)。",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "150金币的抽奖没有任何开奖演出,大奖和安慰奖长得一模一样",
+     "gap": "gachaClick(4928-4964行)点完立刻算结果,唯一视觉反馈是商店行描述文字换成 lastGachaMsg='🎉 上次抽中:...'(4963行,显示在5502行的小字desc里)——一行灰色小字,抽中稀有角色(6%大奖)和抽中60金币在画面上毫无区别,只差一声音效。玩家甚至可能没注意到已经开完奖了。",
+     "benchmark": "商业游戏的抽奖是全游戏演出密度最高的地方:按钮按下→转盘/宝箱抖动蓄力0.5-1s→'咔'地炸开→奖品卡片带光效弹出,稀有度越高光越夸张(普通白光/稀有金光+全屏彩带)。付费点的兴奋感全靠演出兑现。",
+     "fix": "在现有画布UI里加一个 gachaReveal 状态(复用 uiCard 画个小弹窗):阶段1(0-600ms)画一个🎁emoji做 sin 抖动+缩放蓄力,阶段2'砰'——burst 星花粒子+奖品文字带 easeOutBack 弹出,抽中角色时用现成的 drawCharPreview 把角色画在弹窗里,金色外发光(主页大标题那套 shadowBlur 手法照搬),点任意处关闭。结果数据 gachaClick 已经算好,纯加表现层,约100行。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "买到新角色零庆祝,自动出战悄无声息",
+     "gap": "buyChar(4966-4974行)扣钱→push→save.char=id→sfx.power→saveSave,四行结束。花1200金币攒了好几天买的新角色,画面上唯一变化是货架按钮从价格变成'出战中'。商店里换装/买坐骑(gemBuy 4984行)同样静默。",
+     "benchmark": "天天酷跑买到新角色必有'新角色解锁!'全屏展示:角色大图+名字+技能介绍+光柱背景,停留到玩家点掉。这是把'消费'转化为'爽感'的关键一步,也顺带教学了角色技能。",
+     "fix": "和抽奖演出共用同一个奖励弹窗组件:buyChar 成功后置 rewardPop={kind:'char',id},frame() 最上层画——drawCharPreview 大图+渐变金名字+现有 uiChip 画技能徽章(商店行里本来就有'二连跳/滑翔'药丸数据)+星花粒子,点击关闭。买坐骑/皮肤走同一弹窗换文案。",
+     "impact": "medium",
+     "effort": "medium"
+    },
+    {
+     "title": "四个滚动列表全都没有惯性和回弹,手感像拖一块石头",
+     "gap": "UI.touchMove(6343-6354行)商店/成就/天赋/闯关四个列表都是 scroll+=(y-uiTouch.y) 再 clamp 硬夹死:手指停列表停,甩出去没有惯性滑行;滚到头是水泥墙式硬停,没有橡皮筋拉出再弹回。touchEnd(6357行)对滚动不做任何处理。",
+     "benchmark": "手机用户十几年的肌肉记忆就是 fling 惯性+边缘回弹(iOS/微信原生列表都这样),商业游戏画布列表都会自己实现这套。没有惯性的列表是'网页糙感'最典型的暴露点,商店9个角色+升级项一屏放不下,天天要滚。",
+     "fix": "触摸时记录最近两帧的 y 和时间戳算出 velocity;touchEnd 时把 velocity 存进对应列表的 scrollVel;frame() 里每帧 scroll+=scrollVel*dt、scrollVel*=0.94^(dt*60),越界时不再 clamp 而是允许超出但位移乘0.35阻尼,松手后用弹簧(scroll += (边界-scroll)*0.18)拉回。四个列表共用一个 scrollState 工具函数,一次写好四处受益。",
+     "impact": "medium",
+     "effort": "medium"
+    },
+    {
+     "title": "红点提醒只有签到一个,成就可领/天赋可升/礼包外全是盲区",
+     "gap": "全项目唯一的红点在 uiDrawHome 5424-5428行:homeSign 且 canClaimSign() 时画红点(网页版对应 #signDot,160行)。但:成就页里有可领的称号奖励(achTitle 按钮,5878行)时'📖 成就'入口无红点;天赋有钱可升级时'🌟 天赋'无红点;闯关解锁了新关卡'🗺️ 闯关'无红点;商店攒够钱能买下一个角色也无红点(结算卡倒是有金币进度条,主页入口没有)。",
+     "benchmark": "商业游戏的红点是一套全局遍历系统:每个入口都有'里面有事可做'的谓词,红点还会带数字或呼吸闪烁。红点是免费的日活发动机——玩家看到红点就想点掉,顺路多开一局。",
+     "fix": "写一个 dotFor(id) 谓词表:{homeSign:canClaimSign, homeAch:()=>有已解锁未领称号, homeTalent:()=>TALENTS.some(可升且买得起), homeAdv:()=>save.stageMax比上次看时新, homeShop:()=>save.coins>=最便宜未购角色价};把5424行那段红点绘制抽成 drawDot(x,y) 小函数,在 defs/defs2 两个循环里统一按谓词画。约40行。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "商店页签切换内容瞬间整体替换,滚动位置直接归零",
+     "gap": "uiDrawShop 页签回调 cb(){shopTab=tb[0];shopScroll=0;}(5696行):金币↔钻石↔装扮切换是下一帧整列表硬换,没有滑动或淡入过渡,页签本身选中态也是突变(bg 直接换色,5695行)。",
+     "benchmark": "商业游戏商店切页签内容会横向滑入(旧页往左推出、新页从右进来,0.2s)或至少淡入,页签下方有一条滑动的选中指示条,方向感告诉玩家'我在往哪翻'。",
+     "fix": "轻量版:记 shopTabAt=now,切换后头150ms给列表区加 globalAlpha=k 淡入+listX 偏移 (1-k)*20px 的微滑入(方向按页签索引差决定正负);页签底加一条金色指示条,x 用 lerp 追当前页签位置。都在 uiDrawShop 局部改,不影响 zones。",
+     "impact": "low",
+     "effort": "small"
+    },
+    {
+     "title": "签到领取成功瞬间只是按钮文案变灰,当天格子没有盖章动画",
+     "gap": "uiDrawSign 领取按钮 cb(){dailyCheckIn();sfx.power();}(5772-5775行):点完下一帧按钮变'今天已领,明天再来!'灰态、当天格子多个静态✅,奖励金币无感知(横幅还因上面第6条根本不显示)。7天进度的仪式感为零。",
+     "benchmark": "商业游戏签到点领取:当天格子先放大发光→'啪'盖一个章(✅带缩放过冲+音效)→奖励数字从格子飞向钱包→按钮再变灰。一套下来不到1秒,但'今天领到了'的确认感完全不同。",
+     "fix": "dailyCheckIn 成功时记 signClaimAt=now 和当天格子索引;uiDrawSign 里该格子在 claimAt 后300ms内画金色外发光(shadowBlur 脉冲)+✅用 scale 1.8→1 过冲画出;配合第5条的钱包滚动+闪光即可,不用真做飞币也够。约30行。",
+     "impact": "medium",
+     "effort": "small"
+    }
+   ]
+  },
+  {
+   "dimension": "死亡重开循环",
+   "findings": [
+    {
+     "title": "死亡瞬间世界一帧硬冻结，角色没有倒地动画，只是站着把眼睛换成XX",
+     "gap": "die()（game.js ~1183 / html ~1735）当帧就把 state 置 'dead'；update() 的 dead 分支（game.js 2166-2177）只更新粒子，世界、背景、角色腿部摆动全部瞬间定格——狐狸冻在跑步中间姿势。drawCharacter 的 dead 标志（game.js ~3932）只把眼睛画成 X，身体不倒。render 的 dead 分支（game.js 4408-4410 / html 4959）注释写着'保留角色倒地的画面'，实际代码是空的，根本没有倒地。整个死亡瞬间的观感就是：画面'咔'一下卡住了，像掉帧不像阵亡。",
+     "benchmark": "天天酷跑死亡是一段完整表演：角色被绊到→前滚翻/扑倒→贴地滑行带起尘土→躺平冒星星，同时世界带着惯性滑行减速一拍才停，玩家清楚看到'我摔了'而不是'游戏卡了'。",
+     "fix": "不加新状态机，用现成的 bgTime-game.deadAt 当时钟做 0.8 秒'倒地过渡'：dead 分支前 0.8 秒继续推进 game.dist 但让 game.speed 指数衰减到 0（世界滑行刹停）；角色本地动画=ctx.rotate 渐转到躺平 + 落地弹跳一次 + 脚下 puff 尘土 + 头顶画 2-3 颗绕圈小星星（全是角色局部特效，零震屏，符合定稿）。结算卡出现时间从 0.6s 顺延到 1.2s 左右接在动画后面。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "破纪录的那一局也放'游戏结束'丧乐，零庆祝——把进步当失败处理",
+     "gap": "die() 无条件先 stopBGM() + sfx.die()（下行小旋律'噔噔噔咚'，game.js 1196-1197），newBest 判定在它后面（1207-1210）且不影响音效。新纪录在结算卡上只有一行小字 '🎉 新纪录！'（updateDeadCard，game.js 5238），没有彩带、没有欢呼音、没有任何视觉放大。玩家刚创造个人最好成绩，游戏给他放葬礼进行曲。",
+     "benchmark": "天天酷跑刷新纪录是金色大字'新纪录'盖章弹入 + 号角/欢呼声 + 满屏彩带，情绪设计核心就是把'死亡'重构成'庆祝进步'，这是跑酷留存的命门时刻。",
+     "fix": "die() 里把 newBest 判定挪到音效之前：game.newBest ? （新写 4 音上行小号，或先复用 sfx.power）: sfx.die()。结算卡出现帧若 newBest，用现成 burst() 从卡片顶部喷两把彩色粒子当彩带，'新纪录'字样加 scale 1.4→1 弹入。两个版本各改十几行。",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "结算卡 0.6 秒后一帧整卡硬弹出，无渐入、分数不滚动、条目不逐项入场",
+     "gap": "微信版 showDead 判定 deadAt>0.6 后 uiDrawDead 一帧画出完整卡片（game.js 6438-6440），函数内没有任何基于 deadAt 的进场插值；网页版 deadEl.classList.toggle('hidden')（html 6081-6082）是 display:none 二值切换，注释写'淡入'但 CSS 里既无 transition 也无 keyframes（全文件只有 giftGlow 一个动画）。分数 deadCard.score 是静态整数直接画（game.js 6118），卡片出现也没有'唰'的音效。",
+     "benchmark": "天天酷跑结算是一套节奏：卡片弹性缩放入场→分数从 0 滚动跳字配'哒哒哒'计数音→里程/金币/连击逐项延迟入场→最后总分定格。这套'跳字仪式感'是商业结算屏和糙结算屏最肉眼可见的差距。",
+     "fix": "uiDrawDead 里用 t=bgTime-game.deadAt 做纯绘制层动画：卡片整体 alpha 0→1 + scale 0.92→1（0.25s ease-out）；score 用插值 Math.floor(score*clamp((t-0.5)/0.6,0,1)) 滚数，每帧变化时低概率触发一声短 tick 音；stats 每行按 index*0.12s 延迟淡入。网页版给 #dead 加 opacity transition，#deadScore 用 rAF 滚数。命中区(zones)本来就每帧重登记，动画期间不登记按钮即可。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "分数是一坨总数，没有逐项结算明细，连击数据白白扔掉",
+     "gap": "updateDeadCard（game.js 5232-5254）无尽模式只给一个 'X 分' 大数，stats 把'本局金币+N·最高纪录·今日任务'挤成一行灰字。局内明明有现成的 game.runDist（里程）、game.coinCount（金币）、comboBest（本局最高连击）、game.bonus（奖励分），全都没拆项展示，玩家不知道分是怎么来的、下次往哪使劲。",
+     "benchmark": "天天酷跑结算逐项列：跑酷得分 + 金币得分 + 连击加成 + 道具加成 → 合计，每项单独跳字入账，玩家能看出'我这局连击拉胯了'，形成改进动机。",
+     "fix": "deadCard.stats 改成明细行：'🏃 里程 X 米'、'💰 金币 +N'、'🔥 最高连击 xM'、（有 bonus 时）'🎁 奖励关 +N'，最后合计=大分数。配合上一条的逐行延迟入场就是完整的商业感结算。数据全是现成变量，纯拼字符串。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "掉坑死亡时狐狸已掉出屏幕外——定格画面里根本没有角色，死得莫名其妙",
+     "gap": "updatePlayer 坠坑分支（game.js 2785-2789）在 p.y > H+30 或滑出左边界才触发 die('pit')，此刻角色已在屏幕外；die() 的 burst 特意写了 Math.min(player.y-player.h/2, H-20)（game.js 1198）来把粒子钳回屏内，等于代码自己承认'人已经不在画面里了'。结果掉坑死的定格帧是一片空场景，精心画的 X 眼死亡表情玩家永远看不到，新手最容易死的死法反而最看不明白。",
+     "benchmark": "跑酷手游掉坑要么慢镜头看着角色坠落冒星，要么角色扒着坑沿挣扎两下再掉，玩家的视线始终跟着角色，'我掉哪了'一目了然。",
+     "fix": "die('pit') 时把角色钉回坑口可见位置：player.y = GROUND_Y+22（半截身子陷在坑里）、X 眼 + 头顶绕圈星星，或在坑沿画两个爪印 + '啊~' 飘字（floatText 现成）。一处赋值加一点局部装饰，两版本同改。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "无尽模式撞死（最常见死法）结算卡一个字不解释死因",
+     "gap": "updateDeadCard 无尽分支的 sub（game.js 5236-5238）：只有 nearMiss/新纪录/掉坑三种情况有文案，最常见的'血条撞空而死'时 sub 是空字符串——闯关模式反而有'撞到障碍没血了'。且 stumble()/die('hit')（game.js 1271-1293）从不记录最后一击是哪种障碍，凶手信息在链路里就丢了，没法给针对性提示。",
+     "benchmark": "商业跑酷死因永远明确：画面聚焦凶手障碍，结算给一句针对性教学'被路障绊倒了，矮的障碍试试滑铲'，把每次死亡变成一次免费教学。",
+     "fix": "stumble 的碰撞调用点把障碍对象传进来，存 lastHitType；die('hit') 时按类型生成 sub：'被 🌵 仙人掌耗光了血——看到矮障碍记得滑铲'。再给定格帧里的凶手障碍画个红色脉冲圈圈（局部特效，合规）。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "复活按钮无倒计时无紧迫感，还常年挂着一根'即将开放'的死灰广告按钮",
+     "gap": "uiDrawDead 的复活按钮（game.js 6159-6165）是静态金色按钮，永久有效、不倒数、不闪；revive()（1367-1386）实际保留分数继续跑，但按钮文案没把'保留 XXXX 分'这个最大卖点说出来。更糙的是 6166-6171：广告位没申请下来，'📺 看广告免费复活（即将开放）'永灰按钮每次死亡都占结算卡一整行——玩家每局都看一遍'不能用'。",
+     "benchmark": "天天酷跑/地铁跑酷的复活是 5 秒倒计时圆环，过时不候，明确写'继续本局、保留分数'——稀缺性+损失厌恶双管齐下，复活转化率的核心就是这个倒计时。商业游戏绝不给玩家看灰按钮。",
+     "fix": "①复活按钮加 8 秒倒计时（bgTime-deadAt 现成），按钮上画收缩的进度环或'8s'数字，到点按钮收起、再来一局上移；②文案改'💰200 复活 · 保留 5320 分继续冲！'；③adReady()===false 时整行不画，等广告位批下来再出现。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "结算按钮 0.6 秒即可点，死亡瞬间狂按跳的玩家会误触花钱复活",
+     "gap": "uiDrawDead 各按钮 cb 只有 if(game.state!=='dead') return 一道闸（game.js 6147/6163/6173），没有时间闸；卡片 0.6 秒弹在屏幕正中——恰是玩家临死狂点跳跃的手指落点，touchstart+touchend 都落在复活钮上就直接扣 200-600 金币。pressJump 的兜底重开倒是有 1.2 秒防误触（game.js 1074-1077），说明作者意识到了这个问题，但按钮区漏了。网页版 DOM 按钮同样 0.6 秒即热。",
+     "benchmark": "商业游戏的结算按钮跟着入场动画渐入，渐入完成前不响应；涉及扣费的按钮（复活）永远不瞬时武装，有的还要求按钮完全静止后才可点。",
+     "fix": "所有 dead 卡按钮 cb 开头加 if(bgTime-game.deadAt<1.1) return（与渐入动画时长对齐，视觉上'看得见=点得着'）；网页版按钮同理用 game.deadAt 闸。两行事。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "闯关'再试一次'每次硬吃 1.6 秒全套加载过场，背板重试循环被拖慢",
+     "gap": "闯关结算的'再试一次'走 startLoading(()=>startGame())（game.js 6152），过场时长 LOAD_COVER 750 + LOAD_REVEAL 750 + 120ms（game.js 4581-4582、6459）≈1.6 秒；而无尽'再来一局'却是直接 startGame() 秒开（game.js 6173）。闯关按代码注释（1201）本来就是'失败即重试'的固定种子背板玩法，恰恰是最需要快速重试环的模式，反而每次都看一遍像素块合拢动画。",
+     "benchmark": "天天酷跑和一切关卡制游戏的'重试本关'都是秒重开——资源已热，没有任何理由再过场；过场仪式感只留给'进新关'。",
+     "fix": "同关重试直接 startGame() 不走 startLoading（关卡种子固定、无资源要加载）；'下一关'保留完整过场当仪式感。改一处调用。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "输给好友挑战分时，结算卡对挑战只字不提，丢掉'差一点就超越XX'的黄金钩子",
+     "gap": "updateDeadCard 只在 game.score > challenge.score 时 push '🆚 击败了XX'（game.js 5248），输了的时候 challenge 在结算卡上完全消失——可是 ready 页明明还画着'XX 向你发起挑战'横幅（game.js 4403-4406），情绪链条断在最关键的一环。复活按钮的 nearTxt 也只认自己的纪录（6160），不认好友分。",
+     "benchmark": "天天酷跑结算的标配钩子：'再得 X 分即可超越好友XX'，直接把社交好胜心喂给复活按钮和'再来一局'，是复活付费率和重开率的主力文案。",
+     "fix": "updateDeadCard 加 else if(challenge) deadCard.stats.push('🆚 差 '+(challenge.score-game.score+1)+' 分超过 '+challenge.name)；复活按钮 nearTxt 条件补上 challenge && challenge.score-game.score<=200 时显示'，就差一口气超过'+challenge.name+'！'。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "点'再来一局'从黑色结算卡到满速奔跑一帧硬切，没有任何起跑衔接",
+     "gap": "无尽'再来一局' cb 直接调 startGame()（game.js 6173），同帧 state 变 playing，下一帧遮罩卡片消失、狐狸已在满速（SPEED_START）奔跑——从静止的深色弹窗到高速滚动的世界零过渡。好在 distToObstacle=750（startGame，1146）给了约 2 秒空跑道，玩法上不坑人，但视觉上是'跳切'，糙感明显。",
+     "benchmark": "商业跑酷重开哪怕再快也有一拍衔接：遮罩快速淡出 + 角色起跑小跳/一声哨音/脚下一蓬尘土，让眼睛有 0.3 秒时间从'看结算'切回'看赛道'。",
+     "fix": "不加等待、不加倒数（重开快是优点要保住）：startGame 后让上一帧的深色遮罩在 0.25 秒内 alpha 渐出（记一个 restartAt 时间戳在 render 里画），同时狐狸起跑瞬间做一个小跳 + puff 尘土 + 短促哨音。纯视觉层，不动玩法节奏。",
+     "impact": "low",
+     "effort": "small"
+    }
+   ]
+  },
+  {
+   "dimension": "音效音乐体验",
+   "findings": [
+    {
+     "title": "sfx.power 一音走天下：35 处大小事件共用同一个三音琶音，听不出轻重贵贱",
+     "gap": "sfx 对象总共只有 9 个音效(jump/land/slide/coin/graze/hit/power/smash/die，game.js 251-274 / html 757-780)。其中 power 被 35 处调用点复用：吃道具、买角色(buyChar 4972)、升天赋(buyTalent 4903)、开宝箱(2098)、复活(revive 1384)、击败Boss(defeatBoss 1544)、破纪录(2704)、抽奖大奖(gachaClick 4942)、签到领奖……全是同一段 523-659-784Hz 方波。玩家击败 Boss 和吃个普通道具听到的是一模一样的声音。",
+     "benchmark": "天天酷跑给每类事件配专属声：购买是收银'叮~'、开宝箱是开盖+流光声、破纪录是号角 fanfare、磁铁/护盾/冲刺每种道具激活音都不同。声音本身就在告诉玩家'这件事有多大'，这是商业游戏'高级感'的核心来源之一。",
+     "fix": "不加素材、纯在现有 beep/playTone 框架里拆 5 个新合成音并按语义分流调用点：sfx.buy(收银感双短音 1319+1760Hz sine)、sfx.fanfare(上行五音+末尾长音，给破纪录/Boss/抽中角色)、sfx.chest(saw 下滑'吱呀'+延迟叮当，宝箱专用)、sfx.claim(签到/礼包领取的温和三连音)、道具按类型在 power 基础上偏移起始音高(护盾低五度、磁铁加颤音)。改动集中在 sfx 定义区+按 grep 结果替换调用点。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "全部 UI 操作零音效：按钮点击、翻页、开关商店、报错全是哑巴",
+     "gap": "小游戏版 UI.touchEnd 里 z.cb() 执行按钮回调(game.js 6367)前后没有任何声音；网页版 DOM 按钮(muteBtn/pauseBtn/商店列表)同样无声。开商店、切页签、关弹窗、进天赋页全程静音；'金币不够！'报错(setShopErr 4923)也只有文字闪一下没有提示音。整个游戏 UI 层给玩家的听觉反馈是零。",
+     "benchmark": "天天酷跑每一次按钮按下都有清脆'嗒'声、确认类按钮'叮'、返回/关闭是稍低的音、钱不够是短促低沉的'噗'否定音。按钮声是玩家判断'点没点上'的第一反馈，缺了它整个 UI 手感发飘、显糙。",
+     "fix": "接入点极小：在 UI.touchEnd 的 z.cb() 执行前统一 sfx.click()（约 2000Hz sine、5ms attack、40ms 衰减、vol 0.03），网页版在各 addEventListener 里同样加。再加一个 sfx.deny()（两个下行短音 300→220Hz）塞进 setShopErr。新增 2 个合成音+一行接入，收益/成本比全场最高。",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "合成音无 attack 包络、方波锯齿裸奔无滤波，起音带'咔'声、音色尖利刺耳",
+     "gap": "网页版 beep 里 g.gain.setValueAtTime(vol, t) 瞬时满音量起音(html 752)；小游戏版 playTone 的 PCM 循环 env 从第 0 个采样就是满值(game.js 227-233)。方波/锯齿从 0 跳到满幅会产生爆点'咔'。且所有波形不经任何滤波，方波高次谐波全裸输出，hit/smash 这类锯齿音在手机外放上尖利刮耳——这是'廉价 8bit 感'的最大物理来源。",
+     "benchmark": "商业游戏所有音效都过 ADSR 包络+滤波混音后导出，起音圆润、高频收敛。即使是像素风游戏，出厂音效也是加了低通和 attack 的'精修芯片音'，不是裸振荡器。",
+     "fix": "约 20 行：小游戏版 PCM 循环加 3ms 线性 attack（i<132 时幅度乘 i/132）+一阶低通递推 y += (x-y)*k（hit/smash 用暗色 k≈0.15，coin/graze 保亮 k≈0.5，k 加进 beep 参数）；网页版 beep 改为 gain 从 0 linearRamp 到 vol(t+0.004)，并在 osc 和 gain 之间插一个 BiquadFilter lowpass。全部音效质感立刻从'裸蜂鸣'变'圆润芯片音'。",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "BGM 只有旋律+贝斯两轨、没有任何打击乐，跑酷最要命的'节奏推进感'缺席",
+     "gap": "scheduleBGM(game.js 356-373 / html 902-919)每拍只排两轨：square 旋律(vol 0.013)+triangle 贝斯(vol 0.028)。没有鼓、没有 hi-hat、没有军鼓。跑酷游戏的速度感一半靠鼓点砸出来，现在的 BGM 听感像 8bit 练习曲，越到高速段越显单薄。",
+     "benchmark": "天天酷跑 BGM 是全编制电子乐，底鼓四四拍打底、hi-hat 切分推速度，乐章越往后鼓越密。玩家未必说得出'缺鼓'，但会直觉感到'我们的音乐没劲'。",
+     "fix": "在现有合成框架内加第三轨打击(约 15-25 行)：给 waveSample/beep 加一种 'noise' 波形(data[i]=（Math.random()*2-1)*env)；scheduleBGM 里每拍强位排 kick(sine 150→40Hz、90ms)、每半拍排 hi-hat(noise 30ms、vol 0.008)、每小节 2/4 拍排 snare(noise+200Hz、60ms)。三个乐章鼓密度递增(第一章只 kick，第三章全套)，速度感分层立现。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "关键燃点时刻集体失声：Fever 触发、成就达成、3-2-1 倒计时、纪录旗全都没声音",
+     "gap": "Fever 触发(game.js 844-849)只有震动 juiceVibrate 没有音效；成就达成横幅(917)无声；暂停恢复的 3-2-1 倒计时(4374 绘制、6425 归零续跑)全程静音；'前方就是你的最远纪录'横幅(2717)也无声。这些恰恰是情绪最该被声音抬起来的瞬间。",
+     "benchmark": "商业跑酷的 Fever 是一声上扬欢呼+BGM 瞬间变奏；倒计时'哔-哔-哔-叮!'是全行业标配（没有它玩家甚至不知道什么时候续跑，得盯着屏幕数字）；成就弹出必带'叮咚'双音。",
+     "fix": "三个小合成音：sfx.fever(快速上行扫频 400→1600Hz + 两个八度跳音，兴奋感)、sfx.ding(880+1320Hz 双音'叮咚'给成就/横幅)、倒计时在 resumeUntil 每跨 500ms 播 660Hz 短哔、归零播 1320Hz 长'叮'(在 6425 续跑判定处和绘制 cnt 变化处各加一行)。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "BGM 乐章切换拦腰硬切，死亡后结算页全程死寂",
+     "gap": "scheduleBGM 361-362 行：里程跨 2500/5000 米瞬间 trk 变、bgm.step 归零，旋律半句被剪断直接换调换速；奖励关进出(bgmPick 352)同样硬切。死亡时 stopBGM(1196)让 die 小旋律独奏——这个设计是对的——但之后整个结算卡页面持续死寂，回主页也要等玩家下一次触屏(touchEnd 6376)音乐才续上，中间是一段尴尬的无声真空。",
+     "benchmark": "天天酷跑段落切换等小节边界、垫一个鼓 fill 或上行 riser 过门；结算页有专属轻快结算曲，玩家看成绩时情绪是被音乐托着的，不是掉进静音里。",
+     "fix": "两步：a) 换轨不立即执行——检测到 bgmPick 结果变化时记 pendingTrack，等 bgm.step%16===0(乐句边界)再切，切换瞬间插一个 0.4s 上行扫频 riser；b) bgmPick 加 dead 分支返回 BGM_MENU(或新写 8 小节轻快结算小调)，die() 里把 stopBGM 改成'停 2 秒后重启'(setTimeout(startBGM, 2000)，让 die 旋律独奏完自然接结算曲)。",
+     "impact": "medium",
+     "effort": "medium"
+    },
+    {
+     "title": "零人格化声音：没有角色语音、欢呼、任何'活物'的声音——这是合成框架的天花板",
+     "gap": "全游戏没有任何人声感的声音。角色被撞只有锯齿波 hit(game.js 260)，死亡只有下行旋律，开局、Fever、破纪录都没有'人'的反应。setFace 表情系统做了视觉人格，听觉人格是零。这一块 beep 合成器物理上做不出来。",
+     "benchmark": "天天酷跑的角色人格一半靠语音：开局'加油哦~'、死亡'啊~'、Fever 时的欢呼、角色选择页的打招呼。玩家对角色的情感连接大量来自这些 1 秒的短语音。",
+     "fix": "这是唯一建议引入真实音频文件的地方：微信小游戏用 wx.createInnerAudioContext 播 mp3(短语音一条 10-20KB，5 条不到 100KB，包体无压力)；网页版用 base64 内联+decodeAudioData 保持单文件架构。最小集 4 条：开局'冲呀!'、死亡'啊哦~'、Fever'太棒了!'、破纪录欢呼。素材可用 CC0 库或 TTS+升调变声自制(狐狸角色升调反而合适)。做了这一条，'糙感'会有质变。",
+     "impact": "high",
+     "effort": "large"
+    },
+    {
+     "title": "整体响度偏低且无压限：手机外放比商业游戏'又小又薄'",
+     "gap": "sfx 振幅 0.035-0.07(约 -24dBFS)，BGM 旋律仅 0.013(约 -38dBFS)，masterGain=1，链路上没有任何 compressor/限幅(html 733-735 / game.js 199-201)。手机外放实测感受会是'声音很小、很单薄'，用户把媒体音量拉满也不如商业游戏响——响度本身就是'制作水准'的直觉信号。",
+     "benchmark": "商业游戏音频统一做响度对齐(接近 -14 LUFS)，出厂前过压限器，小体积扬声器上依然饱满。",
+     "fix": "网页版：masterGain 前插 DynamicsCompressorNode(threshold -20, ratio 4)，master 提到约 2.2。小游戏版没有 compressor 节点保底，在 playTone 写采样时做软限幅 data[i]=Math.tanh(x*2.5)*0.85，各 vol 整体上调约 2 倍。注意和第 3 条(低通)一起调，避免提响后锯齿更刺。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "同一音效每次逐采样一模一样：连续撞击/连吃道具有'复读机'机枪感",
+     "gap": "小游戏版 toneCache(game.js 215-241)按参数缓存 buffer，hit/power/smash 每次播放的波形完全相同；网页版振荡器参数也是定死的。连续撞碎障碍或短时间连吃道具时，人耳对'完全相同的声音连播'非常敏感，立刻听出机械感。coin 靠 combo 升调、jump 靠段数升调已有变化，但 hit/smash/power/graze 没有。",
+     "benchmark": "商业游戏同一事件音效必带 ±5% 随机音调或 3-4 个采样轮换，保证'同一动作每次听起来微妙不同'——这是听觉上'活'和'死'的分界线。",
+     "fix": "3 行：小游戏版播放时 s.playbackRate.value = 0.95 + Math.random()*0.1(BufferSource 支持 playbackRate，不膨胀缓存)；网页版直接给 f0/f1 乘同一个随机系数。BGM 音符(playNote)不要加，只加给 sfx。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "音量控制只有一刀切静音，没有音乐/音效分离开关",
+     "gap": "toggleMute(game.js 277-283 / html 791-798)是单个 fox_muted 布尔，masterGain 0/1 全关全开。想关掉循环 BGM 但保留操作音效提示的玩家(很常见的诉求，尤其边听自己的歌边玩的人)没有任何办法。",
+     "benchmark": "天天酷跑设置页音乐、音效两个独立开关是标配；很多休闲玩家长期'关音乐开音效'游玩。",
+     "fix": "masterGain 下挂两条 bus：bgmGain 和 sfxGain，playNote 连 bgmGain、beep 连 sfxGain；存 fox_bgm/fox_sfx 两个 flag；在暂停菜单(drawPauseMenu)加两个开关按钮(canvas UI 的 addZone 框架现成)。网页版 DOM 加两个按钮同理。",
+     "impact": "medium",
+     "effort": "medium"
+    },
+    {
+     "title": "结算分数静态弹出，没有数字滚动 tally 音和定格音，仪式感差一截",
+     "gap": "uiDrawDead(game.js 6084+)里 deadCard.score 一次性静态画出，没有数字从 0 滚到终值的动画，自然也没有伴随的'哒哒哒'计数音和结尾'锵'的定格音。die 小旋律播完后玩家看成绩的整个过程无声无息。(注：结算卡视觉已做过，这条只补声音+滚动这层，不动卡片结构)",
+     "benchmark": "天天酷跑结算是数字滚动+每跳一下'嗒'一声+定格'锵'+破纪录再叠 fanfare 的组合拳，同样的分数因为这套视听仪式显得'值钱'。",
+     "fix": "deadCard 加一个 revealAt 时间戳，分数用 easeOut 在 0.8s 内从 0 滚到终值(每帧插值取整)；数字变化且距上次播音 >50ms 时播极短 tick(1500Hz sine 20ms vol 0.02)，滚完播一声 sfx.ding；如果本局破纪录，定格后再播 fanfare。改动集中在 uiDrawDead 一个函数内。",
+     "impact": "medium",
+     "effort": "medium"
+    }
+   ]
+  },
+  {
+   "dimension": "新手前三分钟",
+   "findings": [
+    {
+     "title": "首遇教学只覆盖横杆和坑,其余十几种障碍、九种道具全靠玩家死一次自学",
+     "gap": "game.js 里首遇教学只有两处:横杆 barSeen 横幅(makeObstacle 内 1733-1736 行'⬇ 下滑钻过去')和新手教学坑(spawnObstacle 1808-1812 行)。而 PATTERNS(1635-1693)里 tier2-3 的火焰口/激光门/滚锯/地刺/落锤/摆锤/紫色高空鸟(birdHigh,'别跳'这个反直觉规则只藏在随机加载提示 LOAD_TIPS 4583 行里)首次出现零提示;9 种道具吃到时 activatePower(2072-2078)只 floatText 飘个名字'磁铁!',新手根本不知道磁铁/幽灵/缩小是干嘛的。网页版同构(2283-2286 一处 barSeen)。",
+     "benchmark": "天天酷跑/地铁跑酷:每种新障碍第一次登场有弹条说明甚至短暂慢镜,道具首次拾取弹一句功能说明,另有道具图鉴兜底;绝不让玩家用命试错学规则。",
+     "fix": "照 barSeen 先例做通用注册表:save.seen = {} (存档已有兜底模式),makeObstacle/activatePower 里查 if(!save.seen[type]) 就 showBanner 一句固定文案(建一张 type→'一句话怎么应对'的表,约15条文案),道具类附带把 HUD 道具条闪两下。一个 map + 文案表,全在现有单文件内。",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "教学标记'见过就算教过':没做对也永久销号,横幅还会被里程碑报喜顶掉",
+     "gap": "barSeen 在横杆 spawn 那一刻就置 true 并 saveSave(1733-1735),pitsSeen 同样是出现即 +1(1808-1810)——新手第一根横杆没反应过来撞死了,这条教学这辈子不再出现。更糟的是 showBanner 是单槽覆盖式(banner 对象 554-556 行,后写覆盖前写),横杆解锁的 280 米附近正好撞上 300 米新手里程碑横幅(2691-2696),教学文案很可能被'🏁 300米·热身完成'当场顶掉,而 barSeen 已经烧掉了。",
+     "benchmark": "天天酷跑教学是闭环的:滑铲教学不做出滑铲动作不放行,失败就重来一遍;系统提示和教学提示分层显示,教学永远最高优先级不被跑马灯挤掉。",
+     "fix": "两改:①置位时机从'出现'改到'做成'——玩家成功滑过横杆(险过结算处 2387 行附近已有障碍滑到身后的判定点)才 save.barSeen=true,否则下根横杆继续弹;pitsSeen 改为成功跳过坑才计数。②教学文案走独立第二横幅槽(复制 banner 对象为 tutBanner,画在主横幅下方),不和里程碑/成就抢同一个槽。",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "滑铲教学只喊'下滑'不教'怎么滑':不指手势也不指按钮,全速一次过",
+     "gap": "第一根横杆约 15-25 秒后以当前速度冲到脸上,教学就一条 2 秒横幅'⬇ 下滑钻过去!'(1735),既没说'手指往下划'这个手势(手势判定在 uiTouch.slideFired 6338 行),也没把玩家视线引到右下角那颗'⬇滑'圆钮(drawSlideBtn 6293-6305,平时半透明 alpha 0.13 存在感很低)。新手在 2 秒里要自己悟出交互方式,悟不出来就撞死,且教学不再来(见上条)。",
+     "benchmark": "天天酷跑首个滑铲点:时间放慢、屏幕上画出手指下划的动画示意、按钮高亮脉动,玩家做对了才恢复原速——保证 100% 学会才继续。",
+     "fix": "首杆(barSeen 未置位)入场期间:⬇滑钮画一圈金色脉动光晕+旁边加'👇'手指 emoji 上下浮动(大厅签到红点 5424、展台呼吸光晕 5371 都是现成画法),横幅文案改成'👇 手指往下划,钻过去!';可选再把 timeScale 降到 0.5 直到玩家滑出第一次(这是教学慢动作,不属于被否决的命中顿帧)。玩家滑过一次即恢复并置位。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "教学坑会被'野坑'抢跑:新手第一个坑可能是没预警的宽坑,直接摔死",
+     "gap": "教学窄坑(70 宽+红色 warn 标记+横幅)要 d>250 且 srand()<0.2 才出(spawnObstacle 1808-1812),是概率触发;但 tierFloat 的 frac² 软过渡(1818 行)让含坑的 tier1 图案(1640/1642 行,坑宽 srange(80,130) 见 1824-1826,无 warn 无横幅)从约 150 米起就有相当概率先抽中——相当一部分新手人生第一个坑是又宽又没预警的野坑,'黑坑会摔死'只在 1/8 概率的加载提示里出现过。",
+     "benchmark": "天天酷跑教学元素有硬排序:新机制的教学关卡段强制先于该机制的正式段出现,顺序是设计死的不掷骰子。",
+     "fix": "spawnObstacle 抽段时加一行过滤:if(save.pitsSeen<3) pool 里剔除 seq 含 'pit' 的段(PATTERNS 数据现成可查),同时把教学坑触发概率 0.2 提到 0.5——保证前 3 个坑必然是带预警的教学窄坑,之后野坑才入场。",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "撞死不告诉你凶手是谁:结算卡副标题对新手是空白",
+     "gap": "game.deathBy 只有 'pit'/'hit'/'finish' 三个值(474 行注释、die() 1193 行 cause||'hit'),不记录撞上的是哪种障碍;updateDeadCard 里无尽局只有掉坑有人话提示'掉进坑里啦,看到坑要跳~'(5238),撞障碍死时 sub 是空字符串——新手被滚锯/激光/落锤秒了,结算卡一个字的复盘都没有,下一局还是不会。",
+     "benchmark": "商业跑酷死亡结算都带死因:天天酷跑显示被什么撞了,地铁跑酷有撞车慢镜回放,并配一句针对性技巧提示。",
+     "fix": "碰撞判死处把 o.type 传进 die(),updateDeadCard 建一张 {type: 一句话技巧} 映射('saw':'被滚锯撞了——它比石头快,看到立刻跳!'),填进 deadCard.sub。文案表和第 1 条教学表可以共用一份。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "主页渐进解锁只做了一半:第0局就亮着闯关/天赋/成就/好友榜,新入口解锁又无声无息",
+     "gap": "小游戏版 uiDrawHome 只对今日挑战(5414)/任务胶囊(5445)/出发加成(5467)做了 save.runs>0 门槛,但第二排 闯关/好友榜/成就/天赋 四个入口(defs2 5432-5437)、收集进度行'📖0/x成就·0★/36'(5350)、段位徽章(5341)从第 0 局就全部亮着——新手开跑前面对约 12 个可点目标。而 run1 之后今日挑战/任务又是无声出现,没有任何'解锁了新功能'的仪式或指引。网页版更裸:只藏了 homeDaily 一个(html 5619 行),闯关/天赋按钮(html 515-516)全程可见。",
+     "benchmark": "天天酷跑功能入口随玩家等级逐个解锁:未到级的入口干脆不画,解锁瞬间有开箱动画+红点+手指引导点进去看一眼——第一屏永远只有'开始游戏'一件事。",
+     "fix": "加 save.unlockLv(或复用 runs)做阶梯:run0 只留 开始+商店+签到,藏第二排/收集行/段位尾巴;run1 亮今日挑战+任务,run2 亮闯关,run3 亮天赋/成就/好友榜。回大厅时若有新解锁:该按钮外圈脉动光晕(展台 glow 5371 现成)+红点(签到红点 5424 现成)+一次性'👆新解锁'小字。两个版本同步改。",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "首败结算卡信息过载,还塞着一颗永远灰色的'广告复活(即将开放)'占位钮",
+     "gap": "新手第一次死看到的 uiDrawDead(6085-6188):分数+金币/纪录/任务行+段位行(5252)+'明天来领礼包'预告(6119)+下一目标进度条(6127)+免费复活钮+灰色不可点的'📺看广告免费复活(即将开放)'(6166-6170,adReady 永 false)+再来一局+发战书+回主页,十来个信息块挤一张卡;段位、战书、明日礼包对第 1 局玩家全是噪音,灰按钮更是纯占位。",
+     "benchmark": "天天酷跑首败结算聚焦两件事:复活倒计时和再来一局,成绩细节折叠,社交/段位内容在玩家有积累后才出现;不会给玩家看一个点不了的按钮。",
+     "fix": "updateDeadCard/uiDrawDead 按 save.runs 分层:runs<3 只画 分数+死因一句话(见第5条)+免费复活+再来一局+回主页小字;段位行、礼包预告、发战书 runs>=3 再上。adReady()===false 时整颗广告钮不画(现在已不登记点击区,把绘制也一起省掉)。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "'下一个目标'只是一行死文字:金币攒够了也没法一键去买",
+     "gap": "结算卡目标进度条(6127-6140)显示'下一个目标:小猪噜噜 120/200',frac>=1 时文案变成'金币够了!去商店把它接回家'——但整个区域没有 addZone,不可点;回到大厅商店按钮也没有任何'有东西能买了'的红点(签到有红点先例 5424,商店没有)。新手第 2-3 局明明攒够 200 金币能解锁第一只新角色(pig 价 200,CHARS 999 行),这个最强的前三局钩子却要自己回主页→商店→翻列表才能兑现。",
+     "benchmark": "天天酷跑攒够即弹'可解锁新角色!'带一键前往按钮,商店入口挂红点;'差一点点'状态也会在大厅持续提醒,把解锁做成前几局的主线任务。",
+     "fix": "①目标条整块 addZone:点击 goHome()+toggleShop(true) 并把商店滚动定位到该角色。②uiDrawHome 里 save.coins>=nextGoal().price 时给商店按钮画红点+目标角色名小字。③frac>=1 时进度条用金色呼吸闪(现成 glow 写法)。",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "多处关键小字在老人机小屏上只有8-10pt,难读",
+     "gap": "uiDrawHome 的 fs 下限只有 9 设备像素(5270 行 Math.max(9,...)),任务胶囊文字 fs(0.026)(5458-5462)、出发加成说明'只管下一局·再点一次取消退款' fs(0.022)(5471)、结算卡'明天来领礼包' fs(0.026)(6120):在 dpr=2 的老款小屏手机上分别约 10pt/8.5pt/10pt,低于可读底线;而这几行恰是新手最需要读懂的规则说明。",
+     "benchmark": "商业手游 UI 规范正文最小 12pt 左右,规则说明宁可换行/图标化也不缩成 8pt;天天酷跑的按钮文字全是大号描边字。",
+     "fix": "fs 下限从 9 提到 11-12;fs(0.022)/(0.026) 的说明行统一升到 0.028+,超宽的说明文案拆两行或改成 emoji+短词('🎁只管下一局'),fitText(现成)兜底。",
+     "impact": "low",
+     "effort": "small"
+    },
+    {
+     "title": "无尽'再来一局'零过渡秒切进行时,和闯关'再试一次'的节奏不一致",
+     "gap": "结算卡无尽局 deadAgain 直接 cb 里裸调 startGame()(6172-6173),没有过场也没有 3-2-1,前一帧还是结算卡下一帧狐狸已在跑;而闯关的重玩(6151-6152)却走完整 startLoading(1.5s 像素过场)+1.5s 倒计时。新手连败重试时,从静止阅读状态被瞬间扔进跑动,缺一拍'准备'。",
+     "benchmark": "天天酷跑快速重开也保留一个极短的 Ready-Go 节拍(约0.8秒),让手指有归位时间;同一动作在不同模式下节奏一致。",
+     "fix": "deadAgain 的 cb 里加 paused=true; resumeUntil=performance.now()+800(3-2-1 机制现成,6425-6426 会自动放行),只数一拍'GO';或统一都走 startLoading 但把重开场景的 LOAD_COVER 减半。",
+     "impact": "low",
+     "effort": "small"
+    },
+    {
+     "title": "第2-3局的钩子又弱又打架:照片全屏弹窗正好砸在功能解锁的当口",
+     "gap": "runs>=2 回大厅会弹'上传照片当主角'全屏模态卡(5131-5132 触发,uiDrawAvatarAsk 6191-6199 整屏 addZone 挡住必须二选一),而这正是今日挑战/任务胶囊刚出现、新手该被引去尝试新内容的时机;除此之外第 2-3 局的主动钩子只有前 5 局的 300/500/750 米横幅(2691-2696)和结算卡目标条,大厅本身不会主动说'你差 80 金币就能解锁小猪噜噜'。",
+     "benchmark": "天天酷跑前三次登录/前三局每次回大厅都有一条明确的'下一步':领奖励→升级角色→解锁新功能,由弱引导手指串起来;涉及隐私授权的内容(头像等)放得很后且非模态。",
+     "fix": "①照片邀请挪到 runs>=4,且从全屏模态改成大厅角落带光晕的小气泡(点外面可关,skippedAvatar 逻辑照旧)。②回大厅时算一条'当前最近的钩子'(差X金币解锁角色/今日任务还差1个/今日挑战还没打,数据全现成),画成开始按钮上方一行呼吸小字。",
+     "impact": "medium",
+     "effort": "medium"
+    },
+    {
+     "title": "加载页提示不分新老玩家:首局可能抽到前三分钟根本用不上的冷知识",
+     "gap": "LOAD_TIPS 共 8 条纯随机抽(4583-4585、startLoading 4598),新手第一局的 3 秒过场可能抽到'钻石兔要跳起来扑住'(前三分钟遇不到),而保命的'高处横杆要下滑'只有 1/8 概率出现;教学机会被浪费。",
+     "benchmark": "天天酷跑/地铁跑酷的加载提示按玩家进度定向:新手期固定轮播操作三板斧,老玩家才随机高级技巧。",
+     "fix": "startLoading 里加一行:save.runs<3 时按固定顺序取 ['长按跳得更高','黑坑会摔死,看到就跳','高处横杆要下滑'][save.runs],之后才随机。",
+     "impact": "low",
+     "effort": "small"
+    }
+   ]
+  },
+  {
+   "dimension": "操作手感输入",
+   "findings": [
+    {
+     "title": "微信版滑铲按钮要抬手才触发,手指一抖还会被取消,是全游戏最钝的一个输入",
+     "gap": "game.js 6304 行 addZone('btnSlide',...,()=>startSlide()) 走的是通用按钮通道:touchStart 只记 pendId(6327行),真正回调在 touchEnd 里才执行(6357-6371行)。玩家按下到抬手通常 80-150ms,高速跑酷里等于慢了半个身位;更糟的是 touchMove 里 moved>屏高3% 就取消 pendId(6336行),紧张时拇指按下时带一点滑动,这一铲就凭空消失。网页版 slideBtn 是 pointerdown 即触发(狐狸快跑.html 810-813行),两版手感不一致,偏偏上线的微信版是钝的那个",
+     "benchmark": "天天酷跑的滑铲键是按下(touch down)瞬间触发,和跳跃键完全对等,没有任何'确认抬手'环节;动作按钮只有商店/菜单类才用点击(抬手)语义",
+     "fix": "在 UI.touchStart 的命中循环里给 btnSlide 加特判,和 btnJump 一样按下即执行:if(z.id==='btnSlide'){ startSlide(); return; },不再走 pendId。顺手可把 slideHeld 记下来供以后做长按延长滑铲",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "跳/滑两钮竖着叠在右下角,一根拇指来回跑,天天酷跑标配的双手分工没有做",
+     "gap": "game.js drawSlideBtn(6293-6305行):滑钮贴右下角,跳钮在它正上方(jcy = cy - 2r - ch*0.022),两个核心动作挤在同一拇指的活动范围里。玩家要么单拇指在两钮间跳(每次切换要移动约2个钮的距离),要么点空白屏跳+右手滑,左手全程闲置。网页版同样只有右下角一个滑钮(CSS #slideBtn right:12px bottom:14px)",
+     "benchmark": "天天酷跑是左下角滑铲键+右下角跳跃键的双手布局,左右拇指各管一个动作,互不干扰、零位移,这是双动作跑酷的行业标准布局,反应窗口直接差一个档次",
+     "fix": "把滑钮镜像到左下角(cx = m + r + SAFE.l),跳钮留在右下角原位;'点屏幕任意处=跳'保留不变。网页版 CSS 同步改 left。一行坐标的事,但要配合下一条把多点触控修好,否则双手同时按会互相打断",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "地面上做下滑手势必定先误跳一下,滑铲落空;空中下滑手势还会倒扣一段二段跳",
+     "gap": "触摸落下的瞬间就 pressJump(game.js 6331行/html 1649行),站在地面时 lastPress 会在下一帧被物理循环直接消费成起跳(html 3300-3302行);而下滑手势要等手指移动超过屏高6%才判定(html 1655行/game.js 6339行),典型要 50-100ms——此时狐狸已经跳起来了,startSlide 因 !grounded 直接 return(1592行)。结果:地面下滑手势=误跳+不滑。空中做下滑手势更反直觉:pressJump 的空中分支先消耗一次 airJump 往上蹿(1085-1088行),与玩家'向下'的意图完全相反。教程里宣传的'向下滑=滑铲'三选一输入,实际在两种最常见场景下都是坏的",
+     "benchmark": "天天酷跑干脆不做滑动手势,纯双按钮,从根上避开'落指即跳'和'手势要位移'的时序矛盾;做手势的跑酷(地铁跑酷)则是落指不触发任何动作,靠滑动方向分类,跳是划上而不是点按,两种范式不混用",
+     "fix": "保留点按零延迟跳,加一个'跳改滑补救窗':记录本次手势是否触发了地面跳(gestureJumpAt=bgTime),startSlide 里若 !grounded 但 bgTime-gestureJumpAt<0.1 且 vy<0,则撤销这次跳(y=GROUND_Y,vy=0,grounded=true,jumpsUsed=0)再正常进入滑铲——玩家看到的就是'一落地就铲'。空中分支同理:airJump 后 80ms 内同手势判定为下滑,则恢复 airJump 前的 vy 并退还 jumpsUsed,改为快速下落(vy=max(vy,900))+落地自动接铲",
+     "impact": "high",
+     "effort": "medium"
+    },
+    {
+     "title": "滑铲全程(0.65秒+天赋)吞掉跳跃输入:不能铲跳取消,连缓冲都不给",
+     "gap": "pressJump 里 if(player.sliding) return 发生在 lastPress 赋值之前(html 1561/1570行,game.js 1081/1090行),滑铲期间按跳既不起跳也不进 0.12s 的 buffer,输入直接蒸发。SLIDE_DUR=0.65s 还会被灵动天赋加长,玩家铲到一半看见前方矮桩按跳没反应,只能眼睁睁撞上去或者拼命连点",
+     "benchmark": "天天酷跑滑铲中按跳跃是立即站起+起跳的'铲跳'连招,这是它连续地形能打出流畅感的核心;平台跳跃游戏最低限度也会把这次按键塞进 input buffer 在滑铲结束瞬间兑现",
+     "fix": "pressJump 里把 if(p.sliding) return 改成:滑铲中收到跳跃→立刻收铲(p.sliding=false; p.h=36; p.slideUntil=0)并照常写 lastPress,下一帧物理循环就按地面跳起跳。碰撞框从18恢复36有极小概率当帧撞横杆,可在收铲后给 0.05s 微免伤(复用 invulnUntil)兜底",
+     "impact": "high",
+     "effort": "small"
+    },
+    {
+     "title": "落地前提前按滑无缓冲、空中按滑无快速下落,滑铲没有任何跳跃享有的容错",
+     "gap": "startSlide 要求 p.grounded(html 1592行/game.js 1112行),不满足就静默丢弃。跳跃有 BUFFER=0.12s 的落地前缓存(3300行),滑铲却是零容错:玩家在下落末段提前按滑(非常自然的预输入)什么都不发生,落地后还得再按一次;空中按滑也没有'加速下落'的响应,长滞空的跳跃弧线里玩家对下落完全失控",
+     "benchmark": "天天酷跑空中按滑=角色急速俯冲下坠、触地瞬间自动接滑铲,一个输入两重反馈;平台跳跃类对称地给滑铲做 input buffer 是标配",
+     "fix": "加 player.lastSlidePress:startSlide 里 !grounded 时不 return 而是记时间戳并给一脚快速下落(p.vy=Math.max(p.vy,900),p.gliding=false);物理循环的落地分支(html 3320-3325行)里若 bgTime-lastSlidePress<0.15 则落地即调 startSlide()。约15行,和上一条共用收铲/起铲逻辑",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "轻点跳高度非单调:点得越快反而跳得越高,肌肉记忆建立不起来",
+     "gap": "缓冲跳执行时按松开与否分叉(html 3302行/game.js 2751行):极速轻点(松手早于物理帧消费)走 JUMP_VY*0.8=-656 且不再被截断,弹道顶点约90px;稍慢一点的短按走满速-820随即被 releaseJump 砍到 JUMP_CUT=-420(1585行),顶点只有约40px。同样意图的'轻点一下',按得越干脆跳得越高、按得稍久反而更矮,高度随按压时长非单调,玩家精确控制小跳时会觉得'这游戏跳跃很飘忽'却说不出为什么",
+     "benchmark": "商业跑酷/平台跳跃的按压时长→跳跃高度是严格单调映射:轻点=固定最小跳,按住越久越高直到封顶,任何时长的 tap 结果一致,这是可预测手感的地基",
+     "fix": "把已松手分支统一到截断地板:p.vy = (jumpHeld!==null) ? JUMP_VY : Math.max(JUMP_CUT, JUMP_VY*0.8)(负数取max即-420),让最速点按=最小跳;然后实测最小跳能否稳过最矮障碍,不够就整体上调 JUMP_CUT(比如-480)。两版各改一行加一次调参验证",
+     "impact": "medium",
+     "effort": "small"
+    },
+    {
+     "title": "上升下落同一重力+松手硬切速度,跳跃弧线又飘又有折角,是'糙感'的物理根源",
+     "gap": "html 3313行/game.js 2762行只有一条 p.vy += GRAVITY*dt,上升和下落对称(满跳滞空约0.68s),下落慢=落点悬停久=连续地形的操作节奏拖沓;releaseJump 把 vy 从-820瞬间钳到-420(1585行)是速度阶跃,弧线肉眼可见一个折角,角色像被线拽了一下",
+     "benchmark": "天天酷跑及主流平台跳跃通用配方:下落重力是上升的1.5-2倍(上升舒展、下落干脆利落,落地即可接下一个动作),松手不做硬钳位而是'松手后上升段重力×2.5-3'让速度平滑收敛,弧线无折角;有的再加顶点悬停(apex 附近减重力)增强控制感",
+     "fix": "在现有单文件内改重力行:const g = GRAVITY * (p.vy>0 ? 1.7 : (jumpHeld===null && p.vy<0 ? 2.6 : 1)); p.vy += g*dt,并删掉 releaseJump 里的硬钳位(或保留为极限值)。注意这会改变跳跃水平距离,需要连带核一遍最矮/最高障碍与坑宽的可通过性——建议先在网页版调参数玩十局再同步到微信版",
+     "impact": "medium",
+     "effort": "medium"
+    },
+    {
+     "title": "微信版是单触点输入模型,双手同时操作会互相打断:按着跳再点滑,跳被松开、滑被丢弃",
+     "gap": "game.js 127-154行只跟踪一个 activeTouchId,uiTouch(6309行)是单指结构体。复现:拇指A长按跳钮蓄力(uiTouch.jumpBtn=true),拇指B去点滑钮→B 的 touchStart 覆盖 activeTouchId 与 pendId,B 抬手进 touchEnd 时第一个分支 if(uiTouch.jumpBtn){releaseJump;return}(6359行)——A 还按着,跳却被 B 的抬手提前砍断,滑钮点击也被吞;而 A 后续抬手因不是 activeTouchId 被 147-149 行忽略,jumpHeld 悬挂。一旦按上一条把滑钮挪到左边鼓励双手玩,这个冲突从边缘 bug 变成必踩",
+     "benchmark": "天天酷跑等双按钮手游都是按 touch identifier 逐指绑定按钮:每根手指落下时记 id→按钮,抬起时只结算自己那根,左右手完全独立互不干扰,这是多点触控游戏的底线实现",
+     "fix": "把单值 activeTouchId/uiTouch.jumpBtn/pendId 改成 Map(touchId→{zoneId,isJump,startY,slideFired}):onTouchStart/End 遍历 e.changedTouches 逐个处理;releaseJump 只在'持有跳的那根手指'抬起时调用;下滑手势判定也按各自手指的 startY 算。约40-60行改造,只动 game.js 122-154 和 UI.touchStart/Move/End",
+     "impact": "medium",
+     "effort": "medium"
+    },
+    {
+     "title": "任何无关轻点都会腰斩弹床弹射和月光蝶救援的上升速度",
+     "gap": "releaseJump(html 1585行/game.js 1105行)只要 playing 中 vy<-420 就钳到-420,不管这股上升速度是谁给的:弹床弹起 vy=JUMP_VY*1.7=-1394(html 2955/game.js 2404行)、月光蝶救援-760(3330行),玩家被弹上天时习惯性点一下屏幕(点按=按下+抬起),抬起那下就把弹射砍剩三分之一,'这弹床怎么有时弹很高有时不弹'的怪异感就来自这里",
+     "benchmark": "商业游戏的松手截断只作用于'本次按键发起的那次跳跃':起跳时武装一个 canCut 标志,到达顶点/落地/被外部速度源(弹板、弹射、击飞)覆写时立即解除,外源速度永不被玩家松手影响",
+     "fix": "加 player.cutOk 标志:缓冲跳与 airJump 执行处置 true,落地、vy>=0、以及弹床/月光蝶/Boss击飞等一切外部改 vy 处置 false;releaseJump 改为 if(p.cutOk && p.vy<JUMP_CUT) p.vy=JUMP_CUT。两版各约6处赋值点",
+     "impact": "low",
+     "effort": "small"
+    },
+    {
+     "title": "滑铲时长完全定死,不能长按延长也不能提前站起,输入是'扳机'不是'控制'",
+     "gap": "startSlide 一次性写死 slideUntil=bgTime+SLIDE_DUR(0.65s+天赋)(html 1596行),之后玩家的按住/松开对滑铲毫无影响:提前松开不站起(过短横杆后想马上恢复满身位跳跃要干等),按住不放也不延长(连续两根横杆要掐点再按一次)。跳跃有长按调高的模拟量控制,滑铲却是纯开关",
+     "benchmark": "天天酷跑滑铲是'按住持续铲、松开即站起'(封顶一个最大时长),按压时长直接映射滑行时长,和长按跳高形成对称的模拟手感",
+     "fix": "利用第1条引入的 slideHeld:物理循环里站起条件改为 bgTime>slideUntil || (!slideHeld && bgTime>slideStart+0.25)(0.25s最小滑保证过杆判定),slideUntil 上限放宽到按住可续到 SLIDE_DUR*1.6。键盘版用 keyup ArrowDown/S 同步 slideHeld,恰好补上键盘触屏一致性",
+     "impact": "low",
+     "effort": "small"
+    },
+    {
+     "title": "地面起跳绕道 buffer 晚一个物理帧才起跳,低端机30帧下多吃33ms延迟",
+     "gap": "pressJump 站地面时只写 lastPress(html 1570行),真正起跳、跳跃音效、尘土粒子全在下一次物理循环里发生(3300-3309行)。60帧最多亏16.7ms问题不大,但微信小游戏在低端安卓上常掉到30帧,一帧=33ms,叠加触屏系统延迟后点按到脚离地接近三位数毫秒,和'点下去就起飞'的顶级手感拉开差距。coyote/buffer 本身做得对,只是把'立即能跳'的情况也一起排队了",
+     "benchmark": "商业跑酷在输入回调里同步执行'当下就能成立'的动作(起跳+音效当帧发出),buffer 只兜'现在还不能跳'的按键;音效前置是低成本的体感提速,人耳对声音延迟比画面更敏感",
+     "fix": "pressJump 末尾改为:若 game.state==='playing' 且 (p.grounded || 处于coyote窗) 则直接内联执行缓冲跳那段代码(抽成 doGroundJump() 供两处调用),否则才写 lastPress 进 buffer。两版各改一处,注意保持 jumpsUsed/jumpedRun/统计的同步",
+     "impact": "low",
+     "effort": "small"
+    }
+   ]
+  }
+ ]
+}
