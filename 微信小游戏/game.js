@@ -1041,6 +1041,11 @@ const player = {
   inPit: false,        // 已经掉进坑里了吗（掉进去就踩不到地了，除非跳回坑口以上）
   phase: 0,            // 跑步动画的相位（驱动腿的摆动）
   squash: 0, sx: 1, sy: 1,   // 压扁/拉伸（落地压扁、起跳拉长，让动作有弹性）
+  squashV: 0,          // 【动画】压扁的"变化速度"：像弹簧一样，压下去会弹回来还超一点，Q弹感的来源
+  flipT: -9,           // 【动画】二段跳空翻的开始时刻（0.45秒内转完一整圈）
+  deadSpin: 0,         // 【死亡小剧场】死后翻滚转过的角度
+  deadSettled: false,  // 【死亡小剧场】是否已经摔回地面不再弹了
+  deadSettleTarget: 0, // 【死亡小剧场】最终"仰面躺平"的目标角度
   blinkT: 2, blinking: 0,    // 眨眼计时
   dustT: 0,                  // 跑步扬尘计时
   lastGrounded: 0,           // 最近一次在地面的时刻（土狼时间用）
@@ -1050,7 +1055,9 @@ function resetPlayer(){
   player.x = 120;   // 掉坑时人会跟着世界往左滑，重开时拉回原位
   player.y = GROUND_Y; player.vy = 0; player.grounded = true;
   player.jumpsUsed = 0; player.gliding = false; player.inPit = false;
-  player.phase = 0; player.squash = 0;
+  player.phase = 0; player.squash = 0; player.squashV = 0; player.flipT = -9;
+  player.deadSpin = 0; player.deadSettled = false; player.deadSettleTarget = 0;   // 【死亡小剧场】重开时站起来
+  petPos = null;   // 【宠物跟随】宠物瞬移回主人身边重新出发
   player.lastGrounded = 0; player.lastPress = -1e9;
   player.sliding = false; player.slideUntil = 0; player.h = 36;   // 【酷跑1】重开时收掉下滑状态、恢复正常身高
 }
@@ -1094,6 +1101,8 @@ function airJump(){
   p.jumpsUsed++;
   addStat('jumps', 1);   // 【留存包】③ 空中连跳也算跳跃
   p.vy = JUMP_VY * 0.88;   // 空中跳比地面跳略矮一点
+  p.squash = -0.3; p.squashV = 0;   // 【动画】蹬空气也猛地拉长一下
+  if(p.jumpsUsed >= 2) p.flipT = bgTime;   // 【动画】二段跳起：来一个帅气前空翻（0.45秒转一整圈）
   p.gliding = false;
   sfx.jump(1 + 0.18 * (p.jumpsUsed - 1));   // 第二、三段跳音调依次升高
   burst(p.x + p.w / 2, p.y - 4, 7, ['#ffffff', '#cfe4ff']);   // 蹬空气的小白花
@@ -1115,6 +1124,7 @@ function startSlide(){
   const slideDur = SLIDE_DUR + talentVal('slide');
   p.slideUntil = bgTime + slideDur;
   p.h = SLIDE_H;                  // 身高压到一半：碰撞框和画面都变矮
+  p.squash = 0.3; p.squashV = 0;  // 【动画】入铲瞬间"噗"地压一下，更有扑地感
   setFace('focus', slideDur);    // 专注表情：低头猫腰冲过去（时长跟着天赋一起延长）
   // 扬尘：脚后跟两团灰，像在地上蹭出一道
   burst(p.x + p.w / 2, GROUND_Y - 2, 9, ['#e6dcc2', '#c9bfa0', '#ffffff']);
@@ -1193,6 +1203,11 @@ function die(cause){
   game.deathBy = cause || 'hit';
   game.deadAt = bgTime;
   game.shake = 0;   // 全局零震屏：用户对晃屏极敏感，连阵亡也不晃（game.shake 机制至此全程为0，render 的平移永不触发）
+  // 【死亡小剧场】撞死：把狐狸向上抛起来翻滚，摔回地上弹一下再躺平（见 update 的 dead 分支）。
+  //   只动角色本体、零镜头位移，不违反"零震屏"铁律；掉坑死则由 drawPlayer 画"小灵魂飘上天"。
+  player.deadSpin = 0; player.deadSettled = false; player.deadSettleTarget = 0;
+  if(player.sliding){ player.sliding = false; player.h = 36; }   // 滑铲中阵亡：先站直再演摔倒，不然翻滚时还是压扁的
+  if(game.deathBy !== 'pit'){ player.vy = -430; player.grounded = false; player.gliding = false; }
   stopBGM();   // 背景音乐停下，让"游戏结束"旋律独奏
   sfx.die();
   burst(player.x + player.w/2, Math.min(player.y - player.h/2, H - 20), 26, ['#ff9b4b','#ffd34d','#ffffff']);
@@ -1229,6 +1244,7 @@ function finishDaily(){
   game.state = 'dead';
   game.deathBy = 'finish';
   game.deadAt = bgTime;
+  if(player.sliding){ player.sliding = false; player.h = 36; }   // 滑铲中冲线：站直了领奖，别压扁定格
   stopBGM();
   sfx.power();
   taskProg('meters', 0, Math.floor(game.runDist / 12));
@@ -1243,6 +1259,7 @@ function finishStage(){
   game.state = 'dead';
   game.deathBy = 'finish';   // 复用完赛分支（不算死亡：不刷新无尽纪录、不结挑战）
   game.deadAt = bgTime;
+  if(player.sliding){ player.sliding = false; player.h = 36; }   // 滑铲中冲线：站直了领奖，别压扁定格
   stopBGM();
   sfx.power();
   taskProg('meters', 0, Math.floor(game.runDist / 12));
@@ -1374,6 +1391,8 @@ function revive(){
   game.state = 'playing';
   player.x = 120; player.y = GROUND_Y; player.vy = 0; player.grounded = true;
   player.inPit = false; player.jumpsUsed = 0; player.gliding = false;
+  player.deadSpin = 0; player.deadSettled = false; player.deadSettleTarget = 0;   // 【死亡小剧场】爬起来站直
+  player.sliding = false; player.h = 36; player.squash = 0; player.squashV = 0; player.flipT = -9;
   playerHP = effMaxHP(); lastHurtAt = -99;   // 【血条Boss】复活回满血（【酷跑2】铁骨天赋上限），否则复活瞬间又是 0 血秒死
   invulnUntil = bgTime + 2.5;   // 复活保护期
   pits.length = 0;
@@ -1389,6 +1408,7 @@ function petRevive(){
   player.x = 120; player.y = GROUND_Y; player.vy = 0; player.grounded = true;
   player.inPit = false; player.jumpsUsed = 0; player.gliding = false;
   player.sliding = false; player.slideUntil = 0; player.h = 36;   // 顺手收掉下滑状态，避免复活时压矮
+  player.flipT = -9; player.squash = 0; player.squashV = 0;   // 【动画】清掉上一条命的空翻/形变残留（对齐 revive）
   playerHP = effMaxHP(); lastHurtAt = -99;   // 【酷跑2】不死鸟也回到铁骨天赋的有效满血
   invulnUntil = bgTime + 2.5;   // 复活保护期
   pits.length = 0;
@@ -2172,6 +2192,33 @@ function update(dt){
   }
   if(game.state === 'dead'){
     updateParticles(dt);
+    // 【死亡小剧场】撞死后的小动画：弹起→空中翻滚→砸地弹一下→缓缓仰面躺平。
+    //   世界已经停了，只有角色本体在演——像天天酷跑那样把"失败"也演成一个小剧场。
+    const p = player;
+    // 只有"撞死(hit)"才演翻滚——掉坑(pit)走小灵魂、完赛过关(finish)是胜利不许装死！
+    if(game.deathBy === 'hit' && !p.deadSettled){
+      p.vy += GRAVITY * dt;
+      p.y += p.vy * dt;
+      p.x = Math.max(46, p.x - 55 * dt);   // 被撞得微微向后退
+      p.deadSpin += 7.5 * dt;              // 空中翻滚
+      if(p.y >= GROUND_Y && p.vy > 0 && !p.inPit && !overPit()){   // 摔回地面（脚下得真有地，别悬在坑口）
+        p.y = GROUND_Y;
+        if(p.vy > 150){
+          p.vy = -p.vy * 0.34;             // 还有劲：弹一下
+          puff(p.x + 6, GROUND_Y - 2); puff(p.x + p.w - 6, GROUND_Y - 2);
+        } else {
+          p.vy = 0; p.deadSettled = true;  // 没劲了：准备躺平
+          // 目标角度 = 从当前转角继续往前滚到最近的"四脚朝天"（π + 整圈数）。
+          //   这只狐狸是宽胖团子身材，转 270° 看着像立着；翻肚皮(180°)才是一眼可读的"躺了"
+          const base = Math.PI;
+          p.deadSettleTarget = base + TAU * Math.max(0, Math.ceil((p.deadSpin - base) / TAU));
+        }
+      } else if(p.y > H + 60){
+        p.deadSettled = true;              // 尸体坠进坑里出了画面：到此为止，别一直往下算
+      }
+    } else if(p.deadSettled && p.deadSettleTarget){
+      p.deadSpin += (p.deadSettleTarget - p.deadSpin) * Math.min(1, dt * 10);   // 缓缓躺平
+    }
     game.shake = Math.max(0, game.shake - 40 * dt);
     return;
   }
@@ -2751,6 +2798,7 @@ function updatePlayer(dt){
     p.vy = (jumpHeld !== null) ? JUMP_VY : JUMP_VY * 0.8;
     p.grounded = false;
     p.jumpsUsed = 1;      // 地面跳算第 1 段，连跳角色还能在空中续
+    p.squash = -0.35; p.squashV = 0;   // 【动画】蹬地瞬间猛地拉长——起跳的爆发感
     jumpedRun = true;     // 【新手】跳过了 → 收起"点屏幕跳"引导
     p.lastPress = -1e9;   // 设回"很久以前"，表示这次按键已经用掉了
     addStat('jumps', 1);   // 【留存包】③ 累计跳跃数
@@ -2769,7 +2817,7 @@ function updatePlayer(dt){
     if(p.y >= GROUND_Y && !p.inPit && !overPit()){   // 落地（脚下得有地，且不是已坠坑状态）
       p.y = GROUND_Y; p.vy = 0; p.grounded = true;
       p.jumpsUsed = 0; p.gliding = false;   // 落地后连跳次数重置
-      p.squash = 0.3;         // 落地压扁一下
+      p.squash = 0.3; p.squashV = 0;   // 落地压扁一下（弹簧会自己弹回来还超一点，Q弹）
       sfx.land();
       puff(p.x + 10, GROUND_Y - 2); puff(p.x + p.w - 10, GROUND_Y - 2);
     } else if(p.y >= GROUND_Y){
@@ -2797,7 +2845,11 @@ function updatePlayer(dt){
       // 掉坑自救会让人偏左：脚踏实地时小步跑回原位（不然跑得越久人越靠左）
       if(p.x < 120) p.x = Math.min(120, p.x + 160 * dt);
       p.dustT -= dt;
-      if(p.dustT <= 0){ puff(p.x + 8, GROUND_Y - 2); p.dustT = 0.09; }
+      if(p.dustT <= 0){
+        // 滑铲时：尘土从脚跟冒、频率翻倍——像在地上蹭出一道灰
+        puff(p.x + (p.sliding ? p.w - 2 : 8), GROUND_Y - 2);
+        p.dustT = p.sliding ? 0.04 : 0.09;
+      }
     }
   }
 
@@ -2808,7 +2860,11 @@ function updatePlayer(dt){
 function tickPlayerCosmetics(dt){
   const p = player;
   const target = p.grounded ? 0 : (p.vy < 0 ? -0.12 : 0.08);
-  p.squash += (target - p.squash) * Math.min(1, dt * 10);
+  // 【动画】弹簧形变：不再"慢慢逼近目标"而是像真弹簧——压下去会弹回来、还会超过一点再稳住。
+  //   240=弹簧硬度（越大回弹越快），0.002^dt=阻尼（越小晃得越久）。落地"噗-弹"两拍就是它。
+  p.squashV += (target - p.squash) * 240 * dt;
+  p.squashV *= Math.pow(0.002, dt);
+  p.squash = clamp(p.squash + p.squashV * dt, -0.5, 0.5);
   p.sy = 1 - p.squash;
   p.sx = 1 + p.squash * 0.7;
   if(p.blinking > 0) p.blinking -= dt;
@@ -3739,10 +3795,17 @@ function drawCoins(){
 
 // 【酷跑2】画当前出战的萌宠：飘在玩家身后上方，用 emoji 当本体（轻量、好认），技能触发时加特效。
 //   日赛(dailyMode)下 activePet 返回 null，不画——和"日赛禁用萌宠"一致。
+let petPos = null;   // 【宠物跟随】宠物的实际位置：慢半拍追主人——主人起跳它画出滞后的小弧线，才像"活物在追着飞"
 function drawPet(p){
   const ap = activePet();
   if(!ap) return;
-  const px2 = p.x - 22, py2 = p.y - p.h - 22 + Math.sin(bgTime * 4) * 4;   // 身后偏上，轻轻上下浮
+  // 目标点 = 主人身后偏上 + 轻轻上下浮；宠物每帧只追过去一部分（弹性跟随）
+  const tx = p.x - 22, ty = p.y - p.h - 22 + Math.sin(bgTime * 4) * 4;
+  if(!petPos) petPos = { x: tx, y: ty, t: bgTime };
+  const pdt = Math.min(0.06, Math.max(0, bgTime - petPos.t)); petPos.t = bgTime;
+  petPos.x += (tx - petPos.x) * Math.min(1, pdt * 6);
+  petPos.y += (ty - petPos.y) * Math.min(1, pdt * 6);
+  const px2 = petPos.x, py2 = petPos.y;
   // 星宝/吸金喵：磁吸时（脉冲期或常驻）泛起青色光环
   const magnetic = (ap.id === 'star' && bgTime < petPulseUntil) || ap.id === 'magnetpet';
   if(magnetic){
@@ -3760,9 +3823,14 @@ function drawPet(p){
     ctx.beginPath(); ctx.arc(px2, py2, 13, 0, TAU); ctx.fill();
   }
   ctx.save();
+  ctx.translate(px2, py2);
+  // 【宠物跟随】本体动画：轻轻摇摆 + 呼吸缩放；技能触发的瞬间弹大一圈（"是我干的！"）
+  ctx.rotate(Math.sin(bgTime * 9) * 0.09);
+  const pop = (bgTime < petPulseUntil || bgTime < petSmashFx) ? 1.3 : 1;
+  ctx.scale(pop * (1 + Math.sin(bgTime * 7) * 0.05), pop * (1 - Math.sin(bgTime * 7) * 0.05));
   ctx.font = '20px ' + FONT;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(ap.emoji, px2, py2);
+  ctx.fillText(ap.emoji, 0, 0);
   ctx.restore();
 }
 
@@ -3779,8 +3847,8 @@ function drawPlayer(){
       ctx.beginPath(); ctx.ellipse(p.x + p.w / 2, GROUND_Y - 1, Math.max(6, sw), Math.max(2.5, sw * 0.26), 0, 0, TAU); ctx.fill();
     }
   }
-  // 坐骑（画在角色身后）：火箭滑板优先于筋斗云
-  if(save.board && !dailyMode){
+  // 坐骑（画在角色身后）：火箭滑板优先于筋斗云。阵亡时不画——人都被撞飞了，板不能钉在原地穿帮
+  if(save.board && !dailyMode && game.state !== 'dead'){
     ctx.fillStyle = '#ff7847';
     rr(p.x - 4, p.y - 1, 52, 7, 4); ctx.fill();
     ctx.fillStyle = '#ffd34d';
@@ -3789,7 +3857,7 @@ function drawPlayer(){
     ctx.beginPath();
     ctx.moveTo(p.x - 4, p.y + 2); ctx.lineTo(p.x - 18 - Math.sin(bgTime * 24) * 5, p.y + 3); ctx.lineTo(p.x - 4, p.y + 5);
     ctx.closePath(); ctx.fill();
-  } else if(save.mount && !dailyMode){
+  } else if(save.mount && !dailyMode && game.state !== 'dead'){
     ctx.fillStyle = 'rgba(255,255,255,0.92)';
     ctx.beginPath();
     ctx.ellipse(p.x + p.w / 2,      p.y + 3, 26, 9, 0, 0, TAU);
@@ -3809,8 +3877,8 @@ function drawPlayer(){
     ctx.fillRect(-1, -3, 2, 6);
     ctx.restore();
   }
-  // 飞行道具：背后一对快速扇动的小翅膀
-  if(power.type === 'fly'){
+  // 飞行道具：背后一对快速扇动的小翅膀（阵亡后不画，别让翅膀跟着尸体转）
+  if(power.type === 'fly' && game.state !== 'dead'){
     const flapW = Math.sin(bgTime * 22) * 0.5;
     ctx.fillStyle = 'rgba(255,255,255,0.92)';
     ctx.save();
@@ -3825,16 +3893,28 @@ function drawPlayer(){
   const ghosting = game.state === 'playing' && bgTime < ghostUntil;
   const shrinking = game.state === 'playing' && bgTime < shrinkUntil;
   const shrinkS = shrinking ? 0.6 : 1;   // 缩小药水：身形缩到 0.6（和碰撞框缩小相呼应）
+  // 【动画】本体和幽灵残影共用的姿态（算一次，两边都用，保证残影跟本体真"同款"）
+  const bobY = (p.grounded && !p.sliding && game.state !== 'dead') ? -Math.abs(Math.sin(p.phase)) * 3 : 0;   // 跑步颠簸
+  const slideY = p.sliding ? 0.58 : 1, slideX = p.sliding ? 1.1 : 1;   // 【酷跑1】下滑压低（形变减轻，滑铲感靠腿部姿势撑）
+  const poseRotate = () => {   // 滑铲前倾 / 滑翔 / 二段跳空翻 / 随抛物线俯仰
+    if(p.sliding) ctx.rotate(0.35);
+    else if(p.gliding) ctx.rotate(-0.12);
+    else if(game.state === 'playing' && !p.grounded){
+      if(bgTime - p.flipT < 0.45) ctx.rotate(TAU * (bgTime - p.flipT) / 0.45);   // 【动画】二段跳：帅气前空翻一整圈
+      else ctx.rotate(clamp(p.vy / 1600, -0.15, 0.18));   // 【动画】上升微仰、下落前倾
+    }
+  };
   if(ghosting){
     for(let gi = 2; gi >= 1; gi--){
       ctx.save();
       ctx.globalAlpha = 0.16 * gi;       // 越远的残影越淡
-      ctx.translate(p.x + p.w / 2 - gi * 9, p.y);
-      ctx.scale(p.sx * shrinkS, p.sy * shrinkS);
-      if(p.gliding) ctx.rotate(-0.12);
+      ctx.translate(p.x + p.w / 2 - gi * 9, p.y + bobY);
+      poseRotate();   // 【动画】残影跟本体转同款（空翻/俯仰/滑铲都不掉队）
+      ctx.scale(p.sx * shrinkS * slideX, p.sy * shrinkS * slideY);
       drawCharacter(ctx, ch, {
         time: bgTime - gi * 0.05, grounded: p.grounded,
         swing: p.grounded ? Math.sin(p.phase - gi * 0.4) * 0.6 : 0,
+        airK: clamp((p.vy + 820) / 1640, 0, 1), sliding: p.sliding,   // 【动画】残影跟本体摆同款姿势
         gliding: p.gliding, blinking: p.blinking, dead: false, face: '',
         avatar: null, pal: dailyMode ? CHARS.fox.c : charC(save.char),
       });
@@ -3842,22 +3922,32 @@ function drawPlayer(){
     }
   }
   ctx.save();
-  // 刚撞到障碍的短暂无敌期：闪烁提示
+  // 刚撞到障碍的短暂无敌期：闪烁提示（18弧度/秒≈每秒闪3下，比原来的30柔和不频闪）
   if(game.state === 'playing' && bgTime < invulnUntil){
-    ctx.globalAlpha = 0.45 + 0.35 * Math.sin(bgTime * 30);
+    ctx.globalAlpha = 0.45 + 0.35 * Math.sin(bgTime * 18);
   }
   if(ghosting) ctx.globalAlpha *= 0.5;   // 【内容扩展】幽灵：本体也半透明
-  ctx.translate(p.x + p.w / 2, p.y);   // 以脚底中心为基准
+  // 【动画】跑步颠簸 bobY：脚踏实地跑时身体随步伐上下起伏——"贴纸感"变"跑起来了"的关键一笔
+  ctx.translate(p.x + p.w / 2, p.y + bobY);   // 以脚底中心为基准
   const gs = (power.type === 'giant') ? 1.6 : 1;   // 变大药水：整只放大
-  // 【酷跑1】下滑：身体压扁(Y×0.55)、略横向拉长(X×1.18)，并向前倾——像贴地滑铲
-  const slideY = p.sliding ? 0.55 : 1, slideX = p.sliding ? 1.18 : 1;
-  ctx.scale(p.sx * gs * shrinkS * slideX, p.sy * gs * shrinkS * slideY);   // 压扁/拉伸 × 巨大化 × 缩小 ×【酷跑1】下滑压扁
-  if(p.sliding) ctx.rotate(0.35);      // 【酷跑1】下滑时上身前倾（正角度=向前扑）
-  else if(p.gliding) ctx.rotate(-0.12);   // 滑翔时身体微微前倾，更有飞行感
+  // 【死亡小剧场】只有撞死(hit)才翻滚——完赛过关(finish)是胜利，不许装死！
+  //   绕"身体中心"转，轴心跟着变大药水放大（不然巨型狐狸躺平时头会埋进地里）
+  if(game.state === 'dead' && game.deathBy === 'hit'){
+    ctx.translate(0, -20 * gs); ctx.rotate(p.deadSpin); ctx.translate(0, 20 * gs);
+  }
+  // 注意：旋转都放在 scale 之前——先压扁再旋转会把形状"拧歪"（斜切变形）
+  poseRotate();   // 滑铲前倾 / 滑翔 / 二段跳空翻 / 随抛物线俯仰（和残影同一份逻辑）
+  // 【动画】受击踉跄：撞到障碍的一瞬间身体向后仰一拍再回正（只动本体，符合零震屏铁律）
+  if(game.state === 'playing' && bgTime - lastHurtAt < 0.35 && bgTime >= lastHurtAt){
+    ctx.rotate(-0.2 * (1 - (bgTime - lastHurtAt) / 0.35));
+  }
+  ctx.scale(p.sx * gs * shrinkS * slideX, p.sy * gs * shrinkS * slideY);   // 压扁/拉伸 × 巨大化 × 缩小 ×【酷跑1】下滑压低
   drawCharacter(ctx, ch, {
     time: bgTime,
     grounded: p.grounded,
     swing: p.grounded ? Math.sin(p.phase) * 0.6 : 0,
+    airK: clamp((p.vy + 820) / 1640, 0, 1),   // 【动画】空中相位：0=刚起跳(收腿团身)→1=下落(伸腿准备着地)
+    sliding: p.sliding,                        // 【动画】滑铲专属腿部姿势
     gliding: p.gliding,
     blinking: p.blinking,
     dead: game.state === 'dead',
@@ -3866,6 +3956,43 @@ function drawPlayer(){
     pal: dailyMode ? CHARS.fox.c : charC(save.char),   // 日赛统一原色，平时穿皮肤
   });
   ctx.restore();
+  // 【死亡小剧场】掉坑死：本体已坠出画面，画一只半透明"小灵魂"从坑口缓缓升天（头顶小光环）
+  if(game.state === 'dead' && game.deathBy === 'pit'){
+    const st = bgTime - game.deadAt;
+    const sa = clamp(1 - st / 2.6, 0, 1) * 0.55;
+    if(sa > 0.02){
+      ctx.save();
+      ctx.globalAlpha = sa;
+      ctx.translate(Math.max(p.x + p.w / 2, 70), GROUND_Y - 26 - st * 44);
+      ctx.scale(0.62, 0.62);
+      drawCharacter(ctx, ch, {
+        time: bgTime, grounded: false, swing: 0, airK: 0.15, gliding: false,
+        blinking: 0, dead: true, face: '',
+        avatar: (save.useAvatar && avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) ? avatarImg : null,
+        pal: dailyMode ? CHARS.fox.c : charC(save.char),
+      });
+      ctx.strokeStyle = '#ffe9a0'; ctx.lineWidth = 3;   // 头顶光环
+      ctx.beginPath(); ctx.ellipse(10, -58, 14, 4.5, 0, 0, TAU); ctx.stroke();
+      ctx.restore();
+    }
+  }
+  // 【动画】受击后头顶绕圈的小星星（0.9秒），"被撞懵了"的经典漫画表达
+  if(game.state === 'playing' && bgTime - lastHurtAt < 0.9 && bgTime >= lastHurtAt){
+    const hk = 1 - (bgTime - lastHurtAt) / 0.9;
+    ctx.save();
+    ctx.strokeStyle = '#ffd34d'; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
+    ctx.globalAlpha = Math.min(1, hk * 2);
+    for(let i = 0; i < 3; i++){
+      const ang = bgTime * 9 + i * (TAU / 3);
+      const sx2 = p.x + p.w / 2 + Math.cos(ang) * 17;
+      const sy2 = p.y - p.h - 16 + Math.sin(ang) * 5;
+      ctx.beginPath();
+      ctx.moveTo(sx2 - 3, sy2); ctx.lineTo(sx2 + 3, sy2);
+      ctx.moveTo(sx2, sy2 - 3); ctx.lineTo(sx2, sy2 + 3);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   // 护盾：一圈呼吸的蓝光
   if(shieldOn){
     ctx.strokeStyle = 'rgba(140,200,255,' + (0.65 + 0.25 * Math.sin(bgTime * 6)) + ')';
@@ -3908,12 +4035,27 @@ function drawCharacter(c, ch, o){
   }
   function legs(){
     c.fillStyle = col.dark;
-    leg(-12, o.grounded ?  o.swing : -0.5);
-    leg(6,   o.grounded ? -o.swing :  0.7);
+    const L = (a, b, t) => a + (b - a) * t;   // 两个数之间按比例取中间值
+    if(o.sliding){
+      // 【动画】滑铲专属姿势：后腿收拢、前腿蹬直伸向前——真滑铲，不是"被压扁还在跑步"
+      leg(-12, -0.35, 0.5);
+      leg(6, 1.35, 0.05);
+    } else if(!o.grounded){
+      // 【动画】空中姿势随抛物线变化：刚起跳收腿团身(airK=0) → 下落伸腿准备着地(airK=1)
+      const k = o.airK === undefined ? 0.6 : o.airK;
+      leg(-12, L(0.5, -0.3, k), L(1.25, 0.15, k));
+      leg(6,   L(0.9, 0.15, k), L(1.35, 0.25, k));
+    } else {
+      leg(-12,  o.swing);
+      leg(6,   -o.swing);
+    }
   }
-  function leg(ox, sw){
+  function leg(ox, sw, knee){
+    // 【动画】两段式腿：大腿+小腿在"膝盖"处折一下。向前迈时膝盖自然弯曲（抬膝），跑姿立刻不像木棍
     c.save(); c.translate(ox, -10); c.rotate(sw * 0.7);
-    crr(-3, 0, 7, 11, 3); c.fill();
+    crr(-3, 0, 7, 7, 3); c.fill();                                   // 大腿
+    c.translate(0, 6); c.rotate(knee === undefined ? Math.max(0, sw) * 0.9 : knee);
+    crr(-3, 0, 7, 6.5, 3); c.fill();                                 // 小腿（膝盖处折）
     c.restore();
   }
   function body(round){
