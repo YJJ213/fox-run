@@ -190,6 +190,7 @@ let actx = null, muted = false;
 try{ muted = localStorage.getItem('fox_muted') === '1'; }catch(e){}
 
 // 浏览器规定：声音必须在用户第一次点击/按键之后才能播放，所以在输入事件里调它
+const MASTER_VOL = 1.35;   // 【音效大修】总响度（压限器兜底防破音）
 let masterGain = null;   // 总音量开关：所有声音都先经过它，静音=拧到 0（已经发出的音也立刻消失）
 function ensureAudio(){
   if(!actx){
@@ -199,8 +200,14 @@ function ensureAudio(){
     if(AC){
       actx = AC;
       masterGain = actx.createGain();
-      masterGain.gain.value = muted ? 0 : 1;
-      masterGain.connect(actx.destination);
+      masterGain.gain.value = muted ? 0 : MASTER_VOL;
+      // 【音效大修】总线压限：整体响度提到 1.35 倍，峰值由压限器兜底不破音（手机外放不再"又小又薄"）
+      try{
+        const comp = actx.createDynamicsCompressor();
+        comp.threshold.value = -18; comp.knee.value = 12; comp.ratio.value = 5;
+        comp.attack.value = 0.003; comp.release.value = 0.25;
+        masterGain.connect(comp); comp.connect(actx.destination);
+      }catch(e){ masterGain.connect(actx.destination); }
     }
   }
   // 只要不在播放状态就尝试恢复（iOS 上来电/切后台会把状态变成 'interrupted'）
@@ -215,7 +222,7 @@ function waveSample(type, phase){
   return p < 0.5 ? 4 * p - 1 : 3 - 4 * p;   // triangle
 }
 const toneCache = new Map();   // 【小游戏改造】音色缓存：同一种音符只合成一次，之后直接播（手机省电不掉帧）
-function playTone(f0, f1, dur, type, vol, when){
+function playTone(f0, f1, dur, type, vol, when, pure){
   if(!actx || !masterGain) return;
   try{
     const key = type + '|' + f0 + '|' + f1 + '|' + dur + '|' + vol;
@@ -229,15 +236,25 @@ function playTone(f0, f1, dur, type, vol, when){
       let phase = 0, env = vol, f = Math.max(1, f0);
       const envMul = Math.pow(0.0001 / vol, 1 / nd);
       const fMul = Math.pow(Math.max(1, f1) / Math.max(1, f0), 1 / nd);
+      // 【音效大修】8毫秒线性起音去掉开头的"咔"；方波/锯齿再过一道低通磨掉毛刺（不再刺耳）
+      const atk = Math.min(nd, Math.floor(sr * 0.008));
+      const buzzy = (type === 'square' || type === 'sawtooth');
+      const kLP = buzzy ? (1 - Math.exp(-2 * Math.PI * Math.min(9000, Math.max(f0, f1) * 6) / sr)) : 1;
+      let lpv = 0;
       for(let i = 0; i < total; i++){
         phase += f / sr;
-        data[i] = i < nd ? waveSample(type, phase) * env : 0;
+        let v = i < nd ? waveSample(type, phase) * env : 0;
+        if(i < atk) v *= i / atk;
+        if(buzzy){ lpv += (v - lpv) * kLP; v = lpv; }
+        data[i] = v;
         if(i < nd){ env *= envMul; f *= fMul; }
       }
       if(toneCache.size < 200) toneCache.set(key, buf);   // 防御上限：实际只有几十种音符
     }
     const s = actx.createBufferSource();
     s.buffer = buf;
+    // 【音效大修】±1.7% 音高微变：同一音效每次略有不同，去掉"复读机感"（BGM 音符走 pure 通道保持准音）
+    if(!pure){ try{ s.playbackRate.value = 1 + (Math.random() - 0.5) * 0.035; }catch(e){} }
     s.connect(masterGain);
     s.start(when);
   }catch(e){}
@@ -265,6 +282,49 @@ const sfx = {
            beep({f0:784, dur:0.14, type:'square', vol:0.05, delay:0.16}); },
   smash(){ beep({f0:140, f1:60, dur:0.12, type:'square',   vol:0.06});      // 撞碎障碍
            beep({f0:90,  f1:40, dur:0.16, type:'sawtooth', vol:0.05, delay:0.02}); },
+  buy(){    // 【音效大修】购买成功：收银"叮-叮-咔"
+    beep({f0:1319, dur:0.05, type:'sine', vol:0.05});
+    beep({f0:1760, dur:0.09, type:'sine', vol:0.05, delay:0.05});
+    beep({f0:880,  dur:0.06, type:'triangle', vol:0.04, delay:0.13});
+  },
+  open(){   // 【音效大修】开箱/揭晓：吱呀——锵！
+    beep({f0:180, f1:420, dur:0.16, type:'sawtooth', vol:0.035});
+    beep({f0:784,  dur:0.10, type:'square', vol:0.05, delay:0.18});
+    beep({f0:1175, dur:0.16, type:'square', vol:0.05, delay:0.26});
+    beep({f0:1568, dur:0.22, type:'sine',   vol:0.055, delay:0.34});
+  },
+  reward(){ // 【音效大修】领奖（签到/礼包/任务/里程碑）：叮铃铃~
+    beep({f0:1047, dur:0.07, type:'sine', vol:0.05});
+    beep({f0:1319, dur:0.07, type:'sine', vol:0.05, delay:0.07});
+    beep({f0:1568, dur:0.18, type:'sine', vol:0.055, delay:0.14});
+  },
+  levelup(){ // 【音效大修】升级（天赋/道具强化）：蹬蹬蹬↑
+    beep({f0:440, dur:0.06, type:'square', vol:0.045});
+    beep({f0:554, dur:0.06, type:'square', vol:0.045, delay:0.06});
+    beep({f0:659, dur:0.06, type:'square', vol:0.045, delay:0.12});
+    beep({f0:880, dur:0.15, type:'square', vol:0.05,  delay:0.18});
+  },
+  fanfare(){ // 【音效大修】大喜事（完赛/屠龙/集齐/破纪录瞬间）：小号长琶音
+    beep({f0:523,  dur:0.10, type:'square', vol:0.05});
+    beep({f0:659,  dur:0.10, type:'square', vol:0.05, delay:0.10});
+    beep({f0:784,  dur:0.10, type:'square', vol:0.05, delay:0.20});
+    beep({f0:1047, dur:0.10, type:'square', vol:0.05, delay:0.30});
+    beep({f0:1319, dur:0.35, type:'square', vol:0.055, delay:0.40});
+    beep({f0:1047, dur:0.40, type:'triangle', vol:0.05, delay:0.55});
+  },
+  revive(){  // 【音效大修】复活/救援：心跳两下+升调
+    beep({f0:220, dur:0.08, type:'sine', vol:0.06});
+    beep({f0:220, dur:0.08, type:'sine', vol:0.06, delay:0.14});
+    beep({f0:440, f1:880, dur:0.30, type:'triangle', vol:0.05, delay:0.30});
+  },
+  fever(){   // 【音效大修】狂热/爆发触发：急促上行+嘶鸣
+    beep({f0:659,  f1:1319, dur:0.12, type:'sawtooth', vol:0.04});
+    beep({f0:880,  f1:1760, dur:0.14, type:'sawtooth', vol:0.04, delay:0.10});
+    beep({f0:2500, f1:3200, dur:0.08, type:'sine',     vol:0.03, delay:0.22});
+  },
+  tick(){ beep({f0:1200, dur:0.03, type:'sine', vol:0.022}); },   // 【音效大修】结算滚分"嗒嗒嗒"
+  ding(){ beep({f0:1760, dur:0.25, type:'sine', vol:0.05}); beep({f0:2217, dur:0.30, type:'sine', vol:0.035, delay:0.02}); },   // 滚分定格"叮！"
+  count(n){ if(n === 0){ beep({f0:1047, dur:0.20, type:'square', vol:0.05}); } else { beep({f0:659, dur:0.09, type:'square', vol:0.045}); } },   // 3-2-1读秒（0=GO）
   ui(){ beep({f0:950, f1:1350, dur:0.045, type:'sine', vol:0.03}); },   // 【界面手感】按钮点击"嗒"（界面不再是哑巴）
   record(){   // 【界面手感】破纪录小凯歌：赢了就不该放丧乐
     beep({f0:523,  dur:0.09, type:'square',   vol:0.05});
@@ -288,7 +348,7 @@ const sfx = {
 function toggleMute(){
   muted = !muted;
   try{ localStorage.setItem('fox_muted', muted ? '1' : '0'); }catch(e){}
-  if(masterGain) masterGain.gain.value = muted ? 0 : 1;   // 总闸立刻生效，连已排队的音符都会消失
+  if(masterGain) masterGain.gain.value = muted ? 0 : MASTER_VOL;   // 总闸立刻生效，连已排队的音符都会消失
   if(muted) stopBGM();
   else { ensureAudio(); startBGM(); }   // 取消静音时把音乐续上
 }
@@ -355,13 +415,53 @@ const bgm = { on: false, step: 0, nextTime: 0, timer: null, track: null };   // 
 
 function midiToFreq(m){ return 440 * Math.pow(2, (m - 69) / 12); }
 function playNote(midi, t, dur, type, vol){
-  playTone(midiToFreq(midi), midiToFreq(midi), dur, type, vol, t);   // 【小游戏改造】走 PCM 合成
+  playTone(midiToFreq(midi), midiToFreq(midi), dur, type, vol, t, true);   // 【小游戏改造】走 PCM 合成（pure=音乐要准音，不加微变）
 }
 // 【音乐多样化】此刻该放哪首：奖励关期间优先放专属欢快小调；平时按里程乐章 + 本局抽中的 A/B
 function bgmPick(){
   if(game.state !== 'playing') return BGM_MENU;   // 【主页音乐】不在跑就放大厅摇篮曲
   if(bgTime < bonusUntil) return BGM_BONUS;   // 奖励关结束自然切回
   return BGM_TRACKS[bgmTier()][bgmVariant];
+}
+// 【音效大修】鼓组（PCM 合成+缓存）：底鼓=正弦下扫"咚"，踩镲=白噪差分快衰"嚓"——跑酷的"节奏推进感"
+let kickBuf = null, hatBuf = null, hatOpenBuf = null;
+function makeDrumBuf(kind){
+  const sr = 44100, ddur = kind === 'kick' ? 0.12 : (kind === 'hatOpen' ? 0.09 : 0.04);
+  const total = Math.floor(sr * ddur);
+  const buf = actx.createBuffer(1, total, sr);
+  const d = buf.getChannelData(0);
+  if(kind === 'kick'){
+    let phase = 0, f = 150;
+    const fMul = Math.pow(45 / 150, 1 / total);
+    for(let i = 0; i < total; i++){
+      phase += f / sr; f *= fMul;
+      d[i] = Math.sin(phase * TAU) * Math.pow(1 - i / total, 1.6) * 0.10 * (i < 35 ? i / 35 : 1);
+    }
+  } else {
+    let prev = 0;
+    for(let i = 0; i < total; i++){
+      const w = Math.random() * 2 - 1;
+      const hpv = w - prev; prev = w;              // 一阶差分≈高通，留下"嚓"的高频
+      d[i] = hpv * Math.pow(1 - i / total, 2) * (kind === 'hatOpen' ? 0.05 : 0.04) * (i < 15 ? i / 15 : 1);
+    }
+  }
+  return buf;
+}
+function playKick(t){
+  if(muted || !actx) return;
+  try{
+    if(!kickBuf) kickBuf = makeDrumBuf('kick');
+    const s = actx.createBufferSource(); s.buffer = kickBuf; s.connect(masterGain); s.start(t);
+  }catch(e){}
+}
+function playHat(t, open){
+  if(muted || !actx) return;
+  try{
+    let b;
+    if(open){ if(!hatOpenBuf) hatOpenBuf = makeDrumBuf('hatOpen'); b = hatOpenBuf; }
+    else { if(!hatBuf) hatBuf = makeDrumBuf('hat'); b = hatBuf; }
+    const s = actx.createBufferSource(); s.buffer = b; s.connect(masterGain); s.start(t);
+  }catch(e){}
 }
 // WebAudio 的常用玩法：用一个普通定时器，把"接下来一秒多"的音符提前排进播放队列
 function scheduleBGM(){
@@ -370,13 +470,25 @@ function scheduleBGM(){
   // 停了一阵子（暂停/后台回来）的话，把排队起点拉回"现在"，避免一瞬间补播一堆旧音符
   if(bgm.nextTime < actx.currentTime) bgm.nextTime = actx.currentTime + 0.05;
   const trk = bgmPick();
-  if(trk !== bgm.track){ bgm.track = trk; bgm.step = 0; }   // 【音乐多样化】换乐章/换曲子：拍子从头数，防止下标错位
+  if(trk !== bgm.track){
+    // 【音效大修】换乐章：来一小段鼓花过渡（4 连镲 + 一脚底鼓），不再拦腰硬切
+    if(bgm.track && bgm.track !== BGM_MENU && game.state === 'playing'){   // 从大厅曲切进来不算换乐章，别跟读秒音打架
+      for(let fi = 0; fi < 4; fi++) playHat(bgm.nextTime + fi * 0.07);
+      playKick(bgm.nextTime + 0.28);
+    }
+    bgm.track = trk; bgm.step = 0;   // 拍子从头数，防止下标错位
+  }
   while(bgm.nextTime < actx.currentTime + 1.2){
     const i = bgm.step % trk.melody.length;
     if(trk.melody[i]) playNote(trk.melody[i], bgm.nextTime, trk.step * 0.9, 'square', 0.013);
     if(i % 2 === 0){
       const b = trk.bass[(i / 2) % trk.bass.length];
       if(b) playNote(b, bgm.nextTime, trk.step * 1.7, 'triangle', 0.028);
+    }
+    // 【音效大修】鼓组：跑动中才打（大厅摇篮曲不打鼓）——底鼓踩正拍、踩镲填反拍
+    if(trk !== BGM_MENU){
+      if(i % 4 === 0) playKick(bgm.nextTime);
+      if(i % 2 === 1) playHat(bgm.nextTime, i % 8 === 7);
     }
     bgm.nextTime += trk.step;
     bgm.step++;
@@ -403,7 +515,7 @@ function loadSave(){
                 petOwned: ['star'], petActive: 'star',   // 【酷跑2】萌宠：已拥有列表 / 当前出战（默认就送星宝）
                 talents: {},   // 【酷跑2】天赋养成树：每个天赋 id → 已升等级（金币永久升级，越肝越强）
                 stageMax: 1, stageProg: {},   // 【酷跑2】闯关：已解锁到第几关(默认只开第1关) / 每关历史最高星数 {关卡id: 星}
-                runs: 0, pitsSeen: 0, barSeen: false, freeReviveUsed: false, nick: '',
+                runs: 0, pitsSeen: 0, barSeen: false, tut: {}, tutOk: {}, featSeen: {}, freeReviveUsed: false, nick: '',
                 lastLogin: '', streak: 0, daily: null, dailyRun: null,
                 bestDist: 0, lastBeat: '', skins: {}, skinOn: {},
                 // 【留存包】③累计统计 ④成就称号 ⑤明日/回归礼包 ⑥周段位（老存档没有这些字段，全靠这里兜底）
@@ -496,6 +608,7 @@ let playerHP = 100;         // 【血条Boss】玩家当前血量（局内运行
 let lastHurtAt = -99;       // 【血条Boss】上次受伤时刻——脱战 2 秒后才开始回血
 let lastHitType = '';       // 【界面手感】最后一击来自哪种障碍（结算卡"死因提示"用）
 let deadShownAt = 0;        // 【界面手感】结算卡亮出来的时刻（驱动入场动画+分数滚动跳字）
+let tallyTickAt = 0, tallyDinged = false, lastCntPlayed = -1;   // 【音效大修】滚分嗒嗒声节流/定格叮一次/读秒防重复
 let boss = null;            // 【血条Boss】当前 Boss 战对象（null=没在打 Boss）；局内运行时状态，不存档
 let bossDefeated = false;   // 【血条Boss】本局是否击败过至少一只 Boss（成就/统计用）
 let bossAt = BOSS_SCORE;    // 【血条Boss】下一只 Boss 的触发分数（击败后 +18000，中后期循环出现）
@@ -693,6 +806,7 @@ function dailyCheckIn(){
   const gemRwd  = [0, 0,  0,  0,   0,  1, 0,   2][day];
   save.coins += coinRwd; save.gems += gemRwd;
   saveSave();
+  sfx.reward();   // 【音效大修】签到领奖叮铃
   showBanner('📅 连续签到第 ' + save.streak + ' 天！' +
              (coinRwd ? ' +' + coinRwd + '💰' : '') + (gemRwd ? ' +' + gemRwd + '💎' : ''), 3, '#9ff3ff');
 }
@@ -735,8 +849,8 @@ function taskProg(id, amount, singleValue){
     t.done = true;
     const rwd = TASK_REWARDS[save.daily.tasks.indexOf(t)] || { coins: 60 };
     save.coins += rwd.coins || 0; save.gems += rwd.gems || 0;
+    sfx.reward();   // 【音效大修】任务完成领奖音
     showBanner('✅ 任务完成：' + taskName(t) + '  +' + (rwd.coins ? rwd.coins + '💰' : rwd.gems + '💎'), 2.4, '#b8ffb0');
-    sfx.power();
     if(save.daily.tasks.every(x => x.done) && !save.daily.allDone){
       save.daily.allDone = true;
       save.gems += 1;
@@ -860,6 +974,7 @@ function addCombo(){
   if(combo > 0 && combo % feverNeed === 0){   // 每攒满 feverNeed 连击触发一次狂热
     feverUntil = bgTime + 5;
     showBanner('🔥 狂热时刻！得分翻倍 5 秒', 2, '#ff8a5c');
+    sfx.fever();   // 【音效大修】狂热触发专属音
     addStat('fevers', 1);
     juiceVibrate('fever');
   }
@@ -956,6 +1071,7 @@ function claimGift(){
   save.coins += out.coins; save.gems += out.gems;
   save.gift.claimed = todayStr();
   saveSave();
+  sfx.reward();   // 【音效大修】礼包领奖叮铃
   showBanner(st === 'back' ? '🎁 回归礼包：+' + out.coins + '💰 +' + out.gems + '💎 欢迎回来！'
                            : '🎁 明日礼包：+' + out.coins + '💰 明天再来还有！', 2.6, '#ffd34d');
   return out;   // 告诉 UI 层发了什么 {coins, gems}
@@ -1074,7 +1190,7 @@ function resetPlayer(){
   player.deadSpin = 0; player.deadSettled = false; player.deadSettleTarget = 0;   // 【死亡小剧场】重开时站起来
   petPos = null;   // 【宠物跟随】宠物瞬移回主人身边重新出发
   flyCoins.length = 0; gsCur = 1; shrinkCur = 1;   // 【爽感】飞币清空、体型补间回到正常
-  lastHitType = ''; deadShownAt = 0;   // 【界面手感】死因和结算卡计时清零
+  lastHitType = ''; deadShownAt = 0; tallyTickAt = 0; tallyDinged = false;   // 【界面手感】死因/结算卡计时/滚分音状态清零（完赛路径不走die也要复位）
   player.lastGrounded = 0; player.lastPress = -1e9;
   player.sliding = false; player.slideUntil = 0; player.h = 36;   // 【酷跑1】重开时收掉下滑状态、恢复正常身高
 }
@@ -1224,6 +1340,7 @@ function die(cause){
   //   只动角色本体、零镜头位移，不违反"零震屏"铁律；掉坑死则由 drawPlayer 画"小灵魂飘上天"。
   player.deadSpin = 0; player.deadSettled = false; player.deadSettleTarget = 0;
   deadShownAt = 0;   // 【界面手感】结算卡入场动画/滚分从头来
+  tallyTickAt = 0; tallyDinged = false;   // 【音效大修】滚分音效状态复位
   if(player.sliding){ player.sliding = false; player.h = 36; }   // 滑铲中阵亡：先站直再演摔倒，不然翻滚时还是压扁的
   if(game.deathBy !== 'pit'){ player.vy = -430; player.grounded = false; player.gliding = false; }
   stopBGM();   // 背景音乐停下，让结算旋律独奏（丧乐还是凯歌，等下面判完新纪录再定）
@@ -1265,7 +1382,7 @@ function finishDaily(){
   game.deadAt = bgTime;
   if(player.sliding){ player.sliding = false; player.h = 36; }   // 滑铲中冲线：站直了领奖，别压扁定格
   stopBGM();
-  sfx.power();
+  sfx.fanfare();   // 【音效大修】完赛是喜事，吹号！
   taskProg('meters', 0, Math.floor(game.runDist / 12));
   endRunStats(false);   // 【留存包】完赛不算"死亡"，但里程/连击/礼包照常结算
   recordDailyRun();
@@ -1280,7 +1397,7 @@ function finishStage(){
   game.deadAt = bgTime;
   if(player.sliding){ player.sliding = false; player.h = 36; }   // 滑铲中冲线：站直了领奖，别压扁定格
   stopBGM();
-  sfx.power();
+  sfx.fanfare();   // 【音效大修】完赛是喜事，吹号！
   taskProg('meters', 0, Math.floor(game.runDist / 12));
   endRunStats(false);        // 完赛不算"死亡"，但里程/连击/礼包/成就照常结算
   // —— 三星评定：1★=完赛(到这就有) / 2★=本关全程不受伤 / 3★=收集够 goalCoins ——
@@ -1395,7 +1512,7 @@ function startBonus(){
     power.type = 'dash'; power.total = 6; power.until = bonusUntil;
   }
   setFace('joy', 2);
-  sfx.power();
+  sfx.fanfare();   // 【音效大修】奖励关开场吹号
 }
 // 【酷跑2】复活基础价：200*(n+1) 乘重生天赋折扣 (1-0.1*等级)，向上取整。
 //   收费/按钮显示/可否复活判断全走它，三处口径一致（日赛 talentVal('revive')=1 → 裸价）
@@ -1421,7 +1538,7 @@ function revive(){
   }
   showBanner('💖 复活！继续冲！', 1.6, '#ff8aa0');
   ringFx(player.x + player.w / 2, player.y - player.h / 2, '#ff8aa0');   // 【爽感】复活冲击波
-  sfx.power();
+  sfx.revive();   // 【音效大修】复活专属音
   startBGM();   // 音乐重新响起
 }
 // 【酷跑2】萌宠·不死鸟的复活：免费、不扣钱、不动存档，原地满血并清掉眼前危险（在 die 里被 return 拦截后调用）
@@ -1439,7 +1556,7 @@ function petRevive(){
   burst(player.x + player.w / 2, player.y - player.h / 2, 22, ['#ffd34d', '#ff8a5c', '#ffffff']);   // 复活光
   showBanner('🐦 不死鸟救援！满血复活！', 1.8, '#ffb84d');
   setFace('joy', 1.5);
-  sfx.power();
+  sfx.revive();   // 【音效大修】不死鸟救援专属音
 }
 
 /* ========== 8.5 Boss 战（50000 分触发，一局一次，日赛不触发）========== */
@@ -1584,7 +1701,7 @@ function defeatBoss(){
   ringFx(W / 2, H / 2, '#ff8aa0');
   showBanner('🏆 击败BOSS！金币+2000 钻石+5！', 3.5, '#ffd34d');
   setFace('joy', 2.0);
-  sfx.power();
+  sfx.fanfare();   // 【音效大修】屠龙吹号
 }
 
 /* ========== 9. 粒子特效 ========== */
@@ -1799,10 +1916,15 @@ function makeObstacle(type){
   if(type === 'spiketrap'){ o.period = 1.7; o.upFrac = 0.5; o.warn = 0.4; o.phase = srand() * o.period; }
   if(type === 'hammer'){    o.period = 1.9; o.downFrac = 0.34; o.phase = srand() * o.period; }
   obstacles.push(o);
-  // 【酷跑1】第一次遇到横杆：给一条醒目提示横幅，教会新手"这是要下滑的，不是跳的"（日赛不弹，免得占屏）
-  if((type === 'bar' || type === 'lowbar') && !dailyMode && !save.barSeen){
-    save.barSeen = true; saveSave();
-    showBanner('⬇ 下滑钻过去！', 2, '#8ee6ff');
+  // 【新手教学】每种障碍第一次登场都教一句"怎么应对"；做对（无伤通过）才算学会，
+  //   没做对下次还会再教（最多 3 次，不无限唠叨）。日赛不弹，免得占屏。
+  const fam = (type === 'bar' || type === 'lowbar') ? 'bar' : type;
+  if(TUT_TIPS[fam] && !dailyMode && bgTime >= banner.until &&   // 横幅占线就先不教（也不扣次数），别互相顶
+     !(save.tutOk || {})[fam] && ((save.tut || {})[fam] || 0) < 3){
+    save.tut = save.tut || {}; save.tut[fam] = (save.tut[fam] || 0) + 1;
+    saveSave();
+    showBanner(TUT_TIPS[fam], 2.4, '#8ee6ff');
+    o.tutWatch = true;   // 盯着这个障碍：无伤通过 = 学会了
   }
   // 【酷跑1】横杆附近清掉诱人的散币（同空中障碍逻辑），别把人引到杆下站着撞；贴地缝隙的奖励币由 PATTERNS 里 coinsLow 单独放
   if(type === 'bar' || type === 'lowbar'){
@@ -1875,7 +1997,7 @@ function tierFloat(d){
 function spawnObstacle(){
   const d = game.runDist / 12;   // 米
   // 新手教学坑（前 3 个）：窄坑 + 预警，独立于编排系统
-  if(!dailyMode && (save.pitsSeen || 0) < 3 && d > 250 && srand() < 0.2){
+  if(!dailyMode && !adventureMode && (save.pitsSeen || 0) < 3 && d > 250 && srand() < 0.2){
     pits.push({ x: W + 80, w: 70, warn: true });
     save.pitsSeen = (save.pitsSeen || 0) + 1;
     showBanner('❗ 前方有坑，跳过去！', 1.8, '#ff8aa0');
@@ -1892,8 +2014,14 @@ function spawnObstacle(){
   // 元素入场；同段后续元素按设计间距排队（高速时稍微拉开，保证跳跃可行）
   const el = patQueue.shift();
   if(el[0] === 'pit'){
-    const pw = srange(80, 130);
-    pits.push({ x: W + 80, w: pw });
+    // 【新手教学】前 3 个坑不管来自哪：一律窄坑+预警横幅——野坑不许抢在教学坑前面坑新手
+    const newbiePit = !dailyMode && !adventureMode && (save.pitsSeen || 0) < 3;   // 闯关走固定种子，不能少抽随机数（同图背板铁律）
+    const pw = newbiePit ? 70 : srange(80, 130);
+    pits.push({ x: W + 80, w: pw, warn: newbiePit || undefined });
+    if(newbiePit){
+      save.pitsSeen = (save.pitsSeen || 0) + 1; saveSave();
+      showBanner('⚠️ 前方有坑，跳过去！', 1.8, '#ff8aa0');
+    }
     lastPitX = W + 80 + pw / 2;
   } else if(el[0].indexOf('coins') === 0){
     spawnPatternCoins(el[0], el[0] === 'coinsOver' ? lastPitX : W + 80);
@@ -2171,7 +2299,7 @@ function spawnBox(){
 function openBox(bx, by){
   boxCount++;
   setFace('joy', 1.6);
-  sfx.power(); setTimeout(() => { try{ sfx.coin(); }catch(e){} }, 120);   // 开箱"叮当当"
+  sfx.open();   // 【音效大修】开箱专属音：吱呀——锵！
   burst(bx, by, 22, ['#ffd34d', '#fff3b0', '#ffffff', '#7df9ff'], 'coin');
   ringFx(bx, by, '#ffd34d');   // 【爽感】开箱冲击波
   const roll = srand();
@@ -2229,7 +2357,7 @@ function letterComplete(){
   saveSave();
   showBanner('🦊 集齐「狐狸快跑」！+500金币 +3💎 +冲刺券', 3.0, '#ffd34d');
   setFace('joy', 2.0);
-  sfx.power(); setTimeout(() => { try{ sfx.power(); }catch(e){} }, 260);
+  sfx.fanfare();   // 【音效大修】集齐大喜事吹号
   // 全屏庆祝：在玩家头顶放一大束彩花 + 冲击波
   burst(player.x + player.w / 2, player.y - player.h - 10, 40, ['#ffd34d', '#ff8aa0', '#7df9ff', '#ffffff', '#b0fc38']);
   ringFx(player.x + player.w / 2, player.y - player.h / 2, '#ffd34d');
@@ -2312,7 +2440,7 @@ function update(dt){
   if(stormNow && !goldStorm){
     goldStorm = true;
     showBanner('⚡ 黄金风暴！撞碎奖励 +5', 2.2, '#ffd34d');
-    sfx.power();
+    sfx.fever();   // 【音效大修】组合技爆发音
   }
   if(!stormNow) goldStorm = false;
 
@@ -2368,7 +2496,10 @@ function update(dt){
     if(obstacles[i].type === 'meteor' && bgTime > obstacles[i].dropAt + 2){ obstacles.splice(i, 1); continue; }   // 流星烧完即散
     obstacles[i].x -= move + (obstacles[i].extraV || 0) * dt;   // 鸟有额外的迎面飞行速度
     const margin = obstacles[i].type === 'pendulum' ? 260 : 60;   // 摆锤会甩得很远，晚点再清
-    if(obstacles[i].x + obstacles[i].w < -margin) obstacles.splice(i, 1);
+    if(obstacles[i].x + obstacles[i].w < -margin){
+      tutGraduate(obstacles[i]);   // 【新手教学】无伤滑出屏幕=做对了，毕业
+      obstacles.splice(i, 1);
+    }
   }
   for(let i = pits.length - 1; i >= 0; i--){
     pits[i].x -= move;
@@ -2446,6 +2577,7 @@ function update(dt){
            pb.y < ob.y + ob.h + 8 && pb.y + pb.h > ob.y - 8){ smashed = true; break; }
       }
       if(smashed){
+        tutGraduate(o);   // 【新手教学】冲刺撞碎也算"处理掉了"，毕业
         obstacles.splice(i, 1);
         const sm = scoreMult();                    // 【内容扩展】分数狂潮：撞碎得分 ×3
         game.bonus += (goldStorm ? 5 : 2) * sm;
@@ -2533,6 +2665,7 @@ function update(dt){
       const overlapX = pb.x < bx.x + bx.w && pb.x + pb.w > bx.x;
       const headY = pb.y;                              // 玩家头顶（碰撞框上沿）；滑行时 pb 整体下移，头自然低于杆底
       if(overlapX && !player.sliding && headY < bx.y + bx.h){
+        o.hitMe = true;   // 【新手教学】撞上了=没做对，教学不毕业（险过判定也靠它）
         stumble(o.type);
         break;
       }
@@ -2633,7 +2766,7 @@ function update(dt){
         burst(bunny.x, GROUND_Y - 20, 16, ['#7df9ff', '#ffffff']);
         showBanner('💎 抓到钻石兔！钻石 +1', 1.8, '#7df9ff');
         setFace('joy', 1.5);
-        sfx.power();
+        sfx.reward();   // 【音效大修】抓兔子领奖音
         bunny = null;
       }
     }
@@ -2689,6 +2822,7 @@ function update(dt){
     if(best){
       petSmashAt = bgTime + 6;
       const idx = obstacles.indexOf(best);
+      tutGraduate(best);   // 【新手教学】铁拳熊替你撞掉的也毕业
       if(idx >= 0) obstacles.splice(idx, 1);
       const sm = scoreMult();
       game.bonus += 2 * sm;
@@ -2774,7 +2908,7 @@ function update(dt){
       save.coins += 30; game.bonus += 200;
       showBanner('🎉 甩掉巨石！+30 金币', 2.2, '#7fd89a');
       floatText(player.x + player.w / 2, player.y - player.h - 20, '+30 💰', '#ffd34d');
-      sfx.power();
+      sfx.reward();   // 【音效大修】甩掉巨石领奖音
     }
     if(chaseX > -260) chaseX -= 340 * dt;   // 巨石快速退场
   }
@@ -2793,8 +2927,8 @@ function update(dt){
   if(mk > game.milestone){
     game.milestone = mk;
     showBanner('🏁 ' + mk * 1000 + ' 米！距离分 ×' + (1 + Math.min(5, mk) * 0.1).toFixed(1), 2.2, '#ffd34d');
+    sfx.reward();   // 【音效大修】里程碑叮铃
     burst(player.x + player.w / 2, player.y - player.h - 10, 16, ['#ffd34d', '#ffffff']);
-    sfx.power();
   }
   // 【可玩性】新手前1000米的小目标：300/500/750米节点报喜，填满"跑半天没盼头"的空窗（只给前5局新玩家，老玩家不刷屏）
   if((save.runs || 0) <= 5 && game.earlyMile < 3){
@@ -2811,7 +2945,7 @@ function update(dt){
     burst(player.x + player.w / 2, player.y - player.h - 10, 20, ['#ffd34d', '#ffffff', '#ff9b4b'], 'coin');
     ringFx(player.x + player.w / 2, player.y - player.h / 2, '#ffd34d');   // 【爽感】破纪录冲击波
     setFace('joy', 1.5);
-    sfx.power();
+    sfx.fanfare();   // 【音效大修】破纪录瞬间吹号
   }
   // 挑战链接：超过朋友分数的那一刻
   if(endlessOnly() && challenge && save.lastBeat !== challenge.name && game.score > challenge.score){   // 【酷跑2】闯关不结挑战赏
@@ -2819,7 +2953,7 @@ function update(dt){
     save.coins += 100;
     saveSave();
     showBanner('🆚 击败了 ' + challenge.name + '！奖励 +100💰，转发回去让他好看', 3, '#ffd34d');
-    sfx.power();
+    sfx.fanfare();   // 【音效大修】击败好友吹号
   }
   // 纪录旗快到了：提示一次
   if(endlessOnly() && !recordFlagShown && save.bestDist > 1000 &&
@@ -2890,7 +3024,7 @@ function updatePlayer(dt){
         p.vy = -760; p.jumpsUsed = 0; p.inPit = false;
         showBanner('🦋 月光蝶救援！', 1.8, '#d9b8ff');
         burst(p.x + p.w / 2, p.y - 10, 14, ['#d9b8ff', '#ffffff']);
-        sfx.power();
+        sfx.revive();   // 【音效大修】月光蝶救援音
         return;
       }
       // 正在坑里下坠：跟着世界一起往左滑，看起来就是掉进了洞里。
@@ -4730,6 +4864,7 @@ function drawOverlay(){
     ctx.fillStyle = '#fff';
     if(resumeUntil){   // 3-2-1：让玩家看清自己和障碍的位置再开跑
       const cnt = Math.min(3, Math.max(1, Math.ceil((resumeUntil - performance.now()) / 500)));
+      if(cnt !== lastCntPlayed){ lastCntPlayed = cnt; sfx.count(cnt); }   // 【音效大修】3-2-1 读秒
       ctx.font = 'bold 64px ' + FONT;
       ctx.fillText(String(cnt), W / 2, H / 2);
     } else {
@@ -5281,7 +5416,7 @@ function buyTalent(id){
   save.coins -= price;
   if(!save.talents || typeof save.talents !== 'object') save.talents = {};
   save.talents[id] = (save.talents[id] || 0) + 1;
-  sfx.power();
+  sfx.levelup();   // 【音效大修】升级专属音
   saveSave();
 }
 // 有效血量上限：基础满血 + 铁骨天赋（日赛 talentLv 返回 0 → 裸值 PLAYER_MAX_HP）。开局/血条/回血/复活都用它
@@ -5360,7 +5495,7 @@ function upDur(){   // 升级道具时长
   const cost = [100, 250, 500][save.durLevel];
   if(save.coins < cost){ setShopErr('up-dur', '金币不够！', 900); return; }
   save.coins -= cost; save.durLevel++;
-  sfx.power();
+  sfx.levelup();   // 【音效大修】强化专属音
   saveSave();
 }
 function gemBuy(gid){   // 钻石商品（坐骑/精灵）
@@ -5370,7 +5505,7 @@ function gemBuy(gid){   // 钻石商品（坐骑/精灵）
   lastBuyAt = performance.now();
   if(save.gems < gcost){ setShopErr('gem-' + gid, '钻石不够！追兔子去', 1000); return; }
   save.gems -= gcost; save[gid] = true;
-  sfx.power(); saveSave();
+  sfx.buy(); saveSave();   // 【音效大修】购买专属音
 }
 // 【酷跑2】买萌宠：按 cur 扣金币或钻石，加入 petOwned，并自动出战（首次拥有立刻能用）
 function buyPet(id){
@@ -5388,7 +5523,7 @@ function buyPet(id){
   save.petOwned.push(id);
   save.petActive = id;   // 买了就直接出战
   if(id === 'star') save.pet = true;   // 兼容老字段（万一别处还读 save.pet）
-  sfx.power(); saveSave();
+  sfx.buy(); saveSave();   // 【音效大修】购买专属音
 }
 // 【酷跑2】出战某萌宠（必须已拥有）
 function wearPet(id){
@@ -5411,7 +5546,7 @@ function skinBuy(cid, sid){   // 买皮肤
   save.gems -= sk.price;
   (save.skins[cid] = save.skins[cid] || []).push(sk.id);
   save.skinOn[cid] = sk.id;
-  sfx.power(); saveSave();
+  sfx.buy(); saveSave();   // 【音效大修】购买专属音
 }
 // 【小游戏改造】头像上传：网页版是 <input type=file> + FileReader + FaceDetector 人脸检测；
 // 小游戏改用 wx.chooseImage 选照片 → wx.createImage 加载 → 画到 96×96 离屏画布
@@ -5516,7 +5651,8 @@ function goHome(){
     uiAvatarAsk = true;
   }
 }
-function quitToHome(){   // 跑到一半不玩了：本局不结算，直接回大厅
+function quitToHome(){
+  lastCntPlayed = -1;   // 【修】读秒状态清干净，下局 3-2-1 的"3"不哑   // 跑到一半不玩了：本局不结算，直接回大厅
   stopBGM();
   paused = false; resumeUntil = 0;
   goHome();
@@ -5583,6 +5719,42 @@ function boostClick(kind){
 }
 
 /* —— 死亡结算卡的内容（数据照抄网页版 updateDeadCard，绘制在 drawDead） —— */
+// 【新手教学】进阶入口按局数渐进解锁；解锁的那一刻弹横幅庆祝（每个只报一次）
+function announceUnlocks(){
+  if(bgTime < banner.until) return;   // 横幅占线：这帧不报，下次再说（同批解锁自然排队不互顶）
+  save.featSeen = save.featSeen || {};
+  if(!save.featSeen._migrated){
+    save.featSeen._migrated = true;
+    // 老玩家/半新玩家：已经达标的入口本来就见过，静默标记，只对"以后新解锁的"庆祝
+    const thr = { adv: 1, ach: 2, rank: 2, talent: 3 };
+    for(const f in thr){ if(save.runs >= thr[f]) save.featSeen[f] = true; }
+    saveSave();
+  }
+  const feats = [['adv', 1, '🗺️ 闯关冒险'], ['ach', 2, '📖 成就图鉴'], ['rank', 2, '🏆 好友排行'], ['talent', 3, '🌟 天赋养成']];
+  for(const fd of feats){
+    if(save.runs >= fd[1] && !save.featSeen[fd[0]]){
+      save.featSeen[fd[0]] = true; saveSave();
+      showBanner('🎉 新功能解锁：' + fd[2] + '！', 2.6, '#b0fc38');
+      sfx.reward();
+      return;   // 一次报一个，别叠
+    }
+  }
+}
+// 【新手教学】教学障碍被玩家"处理掉"（无伤滑走/冲刺撞碎/铁拳熊撞掉）都算学会，毕业不再教
+function tutGraduate(o){
+  if(!o || !o.tutWatch || o.hitMe) return;
+  const fam = (o.type === 'bar' || o.type === 'lowbar') ? 'bar' : o.type;
+  save.tutOk = save.tutOk || {};
+  if(!save.tutOk[fam]){ save.tutOk[fam] = true; saveSave(); }
+}
+// 【新手教学】每种障碍第一次出现时的"怎么应对"提示——做对(无伤通过)才算学会,没学会最多再教2次
+const TUT_TIPS = {
+  bar: '⬇ 横杆：下滑钻过去！', roller: '🪨 滚石贴地滚来——跳！', saw: '⚡ 滚锯来得飞快——提前跳！',
+  pendulum: '🌀 摆锤：看它甩的节奏再过！', laser: '⛔ 激光门：等它熄灭的空隙冲过去！',
+  flame: '🔥 火焰口：等它停喷再过！', spiketrap: '⚠️ 地刺：缩回去的瞬间踩过去！',
+  hammer: '🔨 落锤：锤子抬起时从下面钻！', trampoline: '🦘 蹦床踩上去弹很高，吃天上的金币！',
+  birdLow: '🐦 飞鸟迎面飞来——跳过或滑过！',
+};   // 流星不走 makeObstacle（事件自带"流星雨来袭"横幅），不进这张表
 // 【界面手感】死因提示：把"最后一击"翻译成人话，死得明明白白（对新手尤其重要）
 const OB_NAMES = { rock:'石头', cactus:'仙人掌', double:'石堆', spikes:'尖刺', roller:'滚石', pendulum:'摆锤', birdLow:'飞鸟', birdHigh:'飞鸟', laser:'激光门', flame:'火焰喷口', saw:'滚锯', spiketrap:'地刺机关', hammer:'落锤', meteor:'流星', bar:'横杆', lowbar:'低栏', chaser:'巨石', boss:'恶龙' };
 function deathCause(){
@@ -5654,6 +5826,7 @@ function updateDeadCard(){
    └──────────────────────────────────────────────────┘
    元素和点击逻辑与旧版一一对应（按钮 id 一个没改），改的只是"摆在哪、长多大" */
 function uiDrawHome(){
+  announceUnlocks();   // 【新手教学】新入口解锁的那一刻弹横幅（内部有防重复）
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   const cw = canvas.width, ch = canvas.height;
@@ -5819,13 +5992,13 @@ function uiDrawHome(){
   });
   // 【留存包】挑战/商店/签到下面再开一排：闯关 + 好友榜 + 成就 +【酷跑2】天赋（同一套宽度体系，整排拼满开始按钮宽）
   const row2Y = rowY + rowH + bGap, row2H = ch * 0.085;
-  const defs2 = [
-    ['homeAdv',    '🗺️ 闯关',   () => { if(!homeOpen() || loadingStart) return; ensureAudio(); uiScreen = 'adventure'; advScroll = 0; }],   // 【酷跑2】闯关冒险模式入口
-    ['homeRank',   '🏆 好友榜', () => { if(!homeOpen() || loadingStart) return; ensureAudio(); openRank(); }],
-    ['homeAch',    '📖 成就',   () => { if(!homeOpen() || loadingStart) return; ensureAudio(); achScroll = 0; uiScreen = 'ach'; }],
-    ['homeTalent', '🌟 天赋',   () => { if(!homeOpen() || loadingStart) return; ensureAudio(); uiScreen = 'talent'; talentScroll = 0; }],   // 【酷跑2】天赋养成树入口
-  ];
-  const bw2c = (startW - bGap * (defs2.length - 1)) / defs2.length, tot2W = defs2.length * bw2c + (defs2.length - 1) * bGap;
+  // 【新手教学】进阶入口按局数渐进解锁：第0局只有"开始"，跑过几局才逐个亮出来——新手不被一屏图标轰炸
+  const defs2 = [];
+  if(save.runs >= 1) defs2.push(['homeAdv',    '🗺️ 闯关',   () => { if(!homeOpen() || loadingStart) return; ensureAudio(); uiScreen = 'adventure'; advScroll = 0; }]);
+  if(save.runs >= 2) defs2.push(['homeRank',   '🏆 好友榜', () => { if(!homeOpen() || loadingStart) return; ensureAudio(); openRank(); }]);
+  if(save.runs >= 2) defs2.push(['homeAch',    '📖 成就',   () => { if(!homeOpen() || loadingStart) return; ensureAudio(); achScroll = 0; uiScreen = 'ach'; }]);
+  if(save.runs >= 3) defs2.push(['homeTalent', '🌟 天赋',   () => { if(!homeOpen() || loadingStart) return; ensureAudio(); uiScreen = 'talent'; talentScroll = 0; }]);
+  const bw2c = defs2.length ? (startW - bGap * (defs2.length - 1)) / defs2.length : 0, tot2W = defs2.length * bw2c + (defs2.length - 1) * bGap;
   defs2.forEach((d, i) => {
     const bx2 = scx2 - tot2W / 2 + i * (bw2c + bGap);
     uiBtn({ id: d[0], x: bx2, y: row2Y, w: bw2c, h: row2H, label: d[1], size: fs(0.03),
@@ -6173,7 +6346,7 @@ function uiDrawSign(){
   uiBtn({ id: 'signClaim', x: cardX + pad, y: claimY, w: cardW - pad * 2, h: claimH,
     label: claimable ? '领取第 ' + nextStreak + ' 天奖励' : '今天已领，明天再来！',
     size: fs(0.036), bg: '#ffd34d', fg: '#4a3500', disabled: !claimable,
-    cb(){ if(!canClaimSign()) return; dailyCheckIn(); sfx.power(); } });
+    cb(){ if(!canClaimSign()) return; dailyCheckIn(); } });   // 【修】dailyCheckIn 内部已放 sfx.reward，别再叠
   uiBtn({ id: 'signClose', x: cardX + pad, y: claimY + claimH + pad * 0.5, w: cardW - pad * 2, h: closeH,
           label: '关 闭', size: fs(0.032), bg: 'rgba(255,255,255,0.14)', fg: '#fff', bold: false, cb: closeSign });
   ctx.restore();
@@ -6586,7 +6759,7 @@ function uiDrawDead(){
   const goalH = deadCard.goal ? ch * 0.075 : 0;
   const giftTease = !adv && giftState() !== 'done';        // 【留存包】④ 明天还有礼包可领：在分数下面预告一句（闯关不显示）
   const giftH = giftTease ? ch * 0.036 : 0;
-  const adH = (adv || dailyMode) ? 0 : ch * 0.06 + btnGap;  // 【留存包】⑦ 广告复活占位按钮（日赛/闯关没有复活，不摆）
+  const adH = (adv || dailyMode || !adReady()) ? 0 : ch * 0.06 + btnGap;  // 【新手教学】广告位没就绪就整个不摆——别挂一颗永远灰的"即将开放"钮占地方
   const nBtn = adv ? (1 + (hasNext ? 1 : 0)) : (1 + (showRev ? 1 : 0) + 1);   // 非闯关：再来一局 + 复活? + 分享/复制(总有一个)
   const cardH = pad * 2 + ch * (0.06 + 0.042 + 0.095) + giftH + statH + goalH + nBtn * (btnH + btnGap) + adH + homeH;
   const cardW = Math.min(cw * 0.4, ch * 1.2);
@@ -6603,6 +6776,9 @@ function uiDrawDead(){
     if(!deadCard.adv){
       const tk = Math.min(1, (performance.now() - deadShownAt) / 900);
       scoreTxt = Math.round(game.score * (1 - Math.pow(1 - tk, 3))) + ' 分';
+      // 【音效大修】滚分嗒嗒嗒（每70毫秒一声），滚到头"叮！"定格
+      if(tk < 1){ if(performance.now() - tallyTickAt > 70){ tallyTickAt = performance.now(); sfx.tick(); } }
+      else if(!tallyDinged){ tallyDinged = true; sfx.ding(); }
     }
     dText(scoreTxt, cx, y + ch * 0.045, fs(0.075), '#ffd34d', 'center', true);
   }
@@ -6617,6 +6793,7 @@ function uiDrawDead(){
   }
   if(deadCard.goal){   // 下一个目标的进度条：金币攒到哪儿了
     const goal = deadCard.goal;
+    const gy0 = y;   // 【新手教学】记住条子起点：整条可点，一点直达商店
     const frac = clamp(save.coins / goal.price, 0, 1);
     const barH = ch * 0.02;
     ctx.fillStyle = 'rgba(255,255,255,0.15)';
@@ -6628,6 +6805,7 @@ function uiDrawDead(){
     const gtxt = frac >= 1 ? '💰 金币够了！去商店把「' + goal.label + '」接回家'
                            : '下一个目标：' + goal.label + '　' + save.coins + ' / ' + goal.price;
     dText(fitText(gtxt, inW, fs(0.028)), cx, y + barH + ch * 0.022, fs(0.028), '#c5cede', 'center');
+    addZone('deadGoal', inX, gy0, inW, goalH, () => { toggleShop(true); });   // 【新手教学】目标条一点就进商店
     y += goalH;
   }
   y += btnGap;
@@ -6654,7 +6832,7 @@ function uiDrawDead(){
             bg: '#ffd34d', fg: '#4a3500', cb(){ if(game.state !== 'dead') return; revive(); } });
     y += btnH + btnGap;
   }
-  if(!dailyMode){   // 【留存包】⑦ 看广告免费复活：广告位还没申请下来，先灰着占位（adReady 永远 false → 不登记点击区）
+  if(!dailyMode && adReady()){   // 【留存包】⑦ 看广告免费复活（广告位就绪才显示，不再灰着占位）
     uiBtn({ id: 'deadAdRevive', x: inX, y: y, w: inW, h: ch * 0.06, label: '📺 看广告免费复活（即将开放）',
             size: fs(0.026), bold: false, disabled: !adReady(),
             cb: adReady() ? function(){ /* 以后在这里接 wx.createRewardedVideoAd(AD.rewardedId) */ } : null });
@@ -6935,6 +7113,7 @@ function frame(t){
   }
   if(paused && resumeUntil && performance.now() >= resumeUntil){
     paused = false; resumeUntil = 0;   // 倒计时结束，正式续跑
+    if(lastCntPlayed > 0){ lastCntPlayed = -1; sfx.count(0); }   // 【音效大修】GO！
   }
   // 【界面手感】列表惯性滚动：松手后继续滑，指数衰减到停（手感从"拖石头"变"冰面推一把"）
   if(scrollInertia && !uiTouch.on){
