@@ -468,6 +468,37 @@
   .shop-row button:not(:disabled):active{ transform: translateY(1px); }
   .shop-row button:disabled{ background: linear-gradient(#454e64, #333a4d); box-shadow: none; }
   #copyBtn{ box-shadow: 0 4px 12px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.5); }
+  /* ========== 【界面手感·批次3】 ========== */
+  /* 弹窗入场：轻微放大回弹 + 淡入（弹窗从 hidden 变可见时自动触发，不再硬弹） */
+  @keyframes cardIn{ 0%{ transform: scale(.88); opacity: 0; } 62%{ transform: scale(1.03); opacity: 1; } 100%{ transform: scale(1); opacity: 1; } }
+  #dead:not(.hidden) #deadCard, #sign:not(.hidden) #signCard, #ach:not(.hidden) #achCard,
+  #talent:not(.hidden) #talentCard, #adv:not(.hidden) #advCard, #shop:not(.hidden) #shopCard{
+    animation: cardIn .32s cubic-bezier(.22,1.2,.36,1);
+  }
+  /* 主页领奖提示条（主页盖住画布，画布横幅看不见 → 用 DOM 提示条补上，签到/礼包的反馈不再丢失） */
+  /* 【修】fixed+body顶层：签到/礼包弹窗(z-index 11)开着时提示条也压得住 */
+  #homeToast{
+    position: fixed; top: 9%; left: 50%; transform: translateX(-50%); z-index: 60;
+    background: rgba(10,14,28,.9); color: #ffd34d; font-weight: 700; font-size: 15px;
+    padding: 9px 20px; border-radius: 22px; z-index: 60; pointer-events: none;
+    border: 1px solid rgba(255,211,77,.4); opacity: 0; transition: opacity .25s; white-space: nowrap;
+  }
+  #homeToast.show{ opacity: 1; }
+  /* 开奖演出：宝箱抖动 → 揭晓奖品（epic=金光 rare=紫光） */
+  #revealFx{ position: absolute; inset: 0; z-index: 70; background: rgba(5,8,18,.6);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #revealFx.hidden{ display: none; }
+  #revealBox{ font-size: 64px; filter: drop-shadow(0 6px 18px rgba(0,0,0,.5)); animation: boxShake .14s linear infinite; }
+  @keyframes boxShake{ 0%{ transform: rotate(-9deg) scale(1); } 50%{ transform: rotate(9deg) scale(1.06); } 100%{ transform: rotate(-9deg) scale(1); } }
+  #revealPrize{ display: none; flex-direction: column; align-items: center; gap: 6px; animation: prizeIn .38s cubic-bezier(.2,1.5,.4,1); }
+  @keyframes prizeIn{ from{ transform: scale(.4); opacity: 0; } to{ transform: scale(1); opacity: 1; } }
+  #revealPrize .rTitle{ font-size: 26px; font-weight: 800; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+  #revealPrize .rSub{ font-size: 14px; color: #cfe0ff; }
+  #revealFx.epic .rTitle{ color: #ffd34d; text-shadow: 0 0 18px rgba(255,211,77,.9), 0 2px 10px rgba(0,0,0,.6); }
+  #revealFx.rare .rTitle{ color: #d9b8ff; text-shadow: 0 0 14px rgba(217,184,255,.8), 0 2px 10px rgba(0,0,0,.6); }
+  /* 通用小红点（有便宜可占就亮：天赋可升级等） */
+  .hotDot{ display: inline-block; width: 9px; height: 9px; background: #ff5a5a; border-radius: 50%; margin-left: 5px; vertical-align: middle; box-shadow: 0 0 6px rgba(255,90,90,.9); }
+  .hotDot.hidden{ display: none; }
 </style>
 </head>
 <body>
@@ -513,7 +544,7 @@
     </div>
     <div id="homeRow"><!-- 【酷跑2】闯关冒险 + 天赋养成树入口 -->
       <button id="homeAdv">🗺️ 闯关</button>
-      <button id="homeTalent">🌟 天赋</button>
+      <button id="homeTalent">🌟 天赋<span id="talentDot" class="hotDot hidden"></span></button>
     </div>
     <div id="homeTasks"></div>
     <div id="homeBoosts"></div>
@@ -566,9 +597,11 @@
   </div>
 </div>
 
+<div id="homeToast"></div>
+<div id="revealFx" class="hidden"><div id="revealBox">🎁</div><div id="revealPrize"><div class="rTitle"></div><div class="rSub"></div></div></div>
 <!-- 死亡结算卡片 -->
 <div id="dead" class="hidden">
-  <div id="deadCard">
+<div id="deadCard">
     <h2 id="deadTitle">游戏结束</h2>
     <div id="deadSub"></div>
     <div id="deadScore"></div>
@@ -769,6 +802,15 @@ const sfx = {
            beep({f0:784, dur:0.14, type:'square', vol:0.05, delay:0.16}); },
   smash(){ beep({f0:140, f1:60, dur:0.12, type:'square',   vol:0.06});      // 撞碎障碍
            beep({f0:90,  f1:40, dur:0.16, type:'sawtooth', vol:0.05, delay:0.02}); },
+  ui(){ beep({f0:950, f1:1350, dur:0.045, type:'sine', vol:0.03}); },   // 【界面手感】按钮点击"嗒"（界面不再是哑巴）
+  record(){   // 【界面手感】破纪录小凯歌：赢了就不该放丧乐
+    beep({f0:523,  dur:0.09, type:'square',   vol:0.05});
+    beep({f0:659,  dur:0.09, type:'square',   vol:0.05, delay:0.09});
+    beep({f0:784,  dur:0.09, type:'square',   vol:0.05, delay:0.18});
+    beep({f0:1047, dur:0.28, type:'square',   vol:0.055, delay:0.27});
+    beep({f0:784,  dur:0.12, type:'triangle', vol:0.05, delay:0.62});
+    beep({f0:1047, dur:0.5,  type:'triangle', vol:0.06, delay:0.74});
+  },
   die(){  // 经典"游戏结束"下行小旋律：噔-噔-噔-噔……咚
     beep({f0:659, dur:0.12, type:'square',   vol:0.05});
     beep({f0:622, dur:0.12, type:'square',   vol:0.05, delay:0.13});
@@ -797,6 +839,12 @@ function toggleMute(){
   else { ensureAudio(); startBGM(); }   // 取消静音时把音乐续上
 }
 muteBtn.addEventListener('click', () => { toggleMute(); muteBtn.blur(); });
+// 【界面手感】全站按钮点击音：界面按钮"嗒"一声（游戏操作钮除外——滑铲有自己的"唰"，别叠）
+document.addEventListener('click', e => {
+  if(!e.target || !e.target.closest) return;
+  const b = e.target.closest('button');
+  if(b && b.id !== 'slideBtn' && !b.closest('#slideBtn')){ ensureAudio(); sfx.ui(); }
+}, true);
 const pauseBtn = document.getElementById('pauseBtn');
 pauseBtn.addEventListener('click', function(){
   if(game.state === 'playing'){
@@ -1029,6 +1077,8 @@ let distToCoin = 500;       // 还要跑多远生成下一串金币
 let invulnUntil = 0;        // 撞到障碍后的短暂无敌截止时刻（防止同一块石头每帧都扣分）
 let playerHP = 100;         // 【血条Boss】玩家当前血量（局内运行时状态，不存档；startGame 重置）
 let lastHurtAt = -99;       // 【血条Boss】上次受伤时刻——脱战 2 秒后才开始回血
+let lastHitType = '';       // 【界面手感】最后一击来自哪种障碍（结算卡"死因提示"用）
+let deadShownAt = 0;        // 【界面手感】结算卡亮出来的时刻（驱动分数滚动跳字）
 let boss = null;            // 【血条Boss】当前 Boss 战对象（null=没在打 Boss）；局内运行时状态，不存档
 let bossDefeated = false;   // 【血条Boss】本局是否击败过至少一只 Boss（成就/统计用）
 let bossAt = BOSS_SCORE;    // 【血条Boss】下一只 Boss 的触发分数（击败后 +18000，中后期循环出现）
@@ -1100,6 +1150,16 @@ let nextMeteorAt = 5000;    // ☄️ 流星雨事件的下一个触发里程（
 const banner = { text: '', until: 0, color: '#ffd34d' };   // 屏幕中央的大横幅
 function showBanner(text, dur, color){
   banner.text = text; banner.until = bgTime + dur; banner.color = color || '#ffd34d';
+  // 【界面手感】主页开着时画布横幅被 DOM 盖住：同步弹一条主页提示条（签到/礼包的反馈以前直接丢失）
+  try{
+    if(homeOpen()){
+      const ht = document.getElementById('homeToast');
+      ht.textContent = text;
+      ht.classList.add('show');
+      clearTimeout(ht._t);
+      ht._t = setTimeout(() => ht.classList.remove('show'), Math.max(1400, dur * 1000));
+    }
+  }catch(e){}
 }
 
 /* —— v3.0：每日系统 / 今日挑战 / 挑战链接 —— */
@@ -1540,6 +1600,7 @@ function resetPlayer(){
   player.deadSpin = 0; player.deadSettled = false; player.deadSettleTarget = 0;   // 【死亡小剧场】重开时站起来
   petPos = null;   // 【宠物跟随】宠物瞬移回主人身边重新出发
   flyCoins.length = 0; gsCur = 1; shrinkCur = 1;   // 【爽感】飞币清空、体型补间回到正常
+  lastHitType = ''; deadShownAt = 0;   // 【界面手感】死因和结算卡计时清零
   player.lastGrounded = 0; player.lastPress = -1e9;
   player.sliding = false; player.slideUntil = 0; player.h = 36;   // 【酷跑1】重开时收掉下滑状态、恢复正常身高
 }
@@ -1760,10 +1821,10 @@ function die(cause){
   // 【死亡小剧场】撞死：把狐狸向上抛起来翻滚，摔回地上弹一下再躺平（见 update 的 dead 分支）。
   //   只动角色本体、零镜头位移，不违反"零震屏"铁律；掉坑死则由 drawPlayer 画"小灵魂飘上天"。
   player.deadSpin = 0; player.deadSettled = false; player.deadSettleTarget = 0;
+  deadShownAt = 0;   // 【界面手感】结算卡入场动画/滚分/彩花从头来（只在这清，商店盖住再露出不重撒彩花）
   if(player.sliding){ player.sliding = false; player.h = 36; }   // 滑铲中阵亡：先站直再演摔倒，不然翻滚时还是压扁的
   if(game.deathBy !== 'pit'){ player.vy = -430; player.grounded = false; player.gliding = false; }
-  stopBGM();   // 背景音乐停下，让"游戏结束"旋律独奏
-  sfx.die();
+  stopBGM();   // 背景音乐停下，让结算旋律独奏（丧乐还是凯歌，等下面判完新纪录再定）
   burst(player.x + player.w/2, Math.min(player.y - player.h/2, H - 20), 26, ['#ff9b4b','#ffd34d','#ffffff']);
   taskProg('meters', 0, Math.floor(game.runDist / 12));   // "单局跑X米"任务在结算时结算
   if(adventureMode){
@@ -1778,6 +1839,8 @@ function die(cause){
       save.bestDist = Math.floor(game.runDist);   // 记下纪录局跑到的距离 → 赛道上的"纪录旗"
     }
   }
+  // 【界面手感】破纪录那局是喜事：奏小凯歌，不放"游戏结束"丧乐（把进步当失败处理是大忌）
+  if(game.newBest && endlessOnly()) sfx.record(); else sfx.die();
   endRunStats(true);   // 【留存包】统计 / 成就 / 礼包 / 周段位 都在局末统一结算
   saveBest();
   updateDeadCard();   // 把结算信息填进 DOM 卡片
@@ -1838,7 +1901,8 @@ function finishStage(){
   showBanner('🏁 过关！' + '★'.repeat(stageStars), 2.2, '#ffd34d');
 }
 // 【血条Boss】撞到障碍：扣血（不再只扣分）——扣 22 血、震屏、短暂无敌闪烁；血空才真正死
-function stumble(){
+function stumble(otype){
+  if(otype) lastHitType = otype;   // 【界面手感】记下凶手——结算卡上告诉玩家"是谁干的"
   if(shieldOn){   // 护盾替你挡下这一击！（挡下不掉血）
     shieldOn = false;
     invulnUntil = bgTime + 1.2;
@@ -1895,7 +1959,7 @@ function startChase(){
 // 被巨石追上：休闲模式不秒死，重伤一下并把巨石顶回去一截，给玩家喘息
 function chaseHit(){
   if(bgTime < invulnUntil) return;
-  playerHP -= 30; lastHurtAt = bgTime; invulnUntil = bgTime + 1.0;
+  playerHP -= 30; lastHurtAt = bgTime; invulnUntil = bgTime + 1.0; lastHitType = 'chaser';
   breakCombo(); setFace('hurt', 1.0); juiceVibrate('hurt'); sfx.hit();   // 巨石撞击：去掉震屏（用户反馈"屏幕一晃一晃"），保留扣血飘字+原地星花
   // 巨石撞击不再放星花特效（同上：撞击只留扣血数字+音效）
   floatText(player.x + player.w / 2, player.y - player.h - 16, '巨石撞击 -30 ❤', '#ff5a5a');
@@ -1996,7 +2060,7 @@ function startBoss(){
 function bossHurt(dmg){
   if(bgTime < invulnUntil) return;   // 刚被打过的极短无敌（0.8 秒）内不重复扣
   playerHP -= dmg;
-  lastHurtAt = bgTime;
+  lastHurtAt = bgTime; lastHitType = 'boss';
   invulnUntil = bgTime + 0.8;   // 比普通障碍(1.0)略短：Boss 弹幕密，但别让玩家完全免疫
   game.penalty += 4;
   breakCombo();
@@ -3004,7 +3068,7 @@ function update(dt){
            pb.y < ob.y + ob.h && pb.y + pb.h > ob.y){
           if(!ENDLESS){ die(); return; }   // 经典模式：撞到就结束
           o.hitMe = true;                  // 【手感·险过】标记"撞到过"，免得撞了还判险过
-          stumble();                       // 休闲模式：绊一下，继续跑
+          stumble(o.type);                 // 休闲模式：绊一下，继续跑（顺手记下死因）
           break;
         }
       }
@@ -3066,7 +3130,7 @@ function update(dt){
       const overlapX = pb.x < bx.x + bx.w && pb.x + pb.w > bx.x;
       const headY = pb.y;                              // 玩家头顶（碰撞框上沿）；滑行时 pb 整体下移，头自然低于杆底
       if(overlapX && !player.sliding && headY < bx.y + bx.h){
-        stumble();
+        stumble(o.type);
         break;
       }
     }
@@ -5599,6 +5663,26 @@ function drawCharPreview(cv, id, t){
   c.restore();
 }
 let lastBuyAt = 0;   // 连点保护：两次购买至少间隔 350 毫秒，防止手抖双击连买两级
+// 【界面手感】开奖/入手演出：宝箱抖 0.7 秒 → 揭晓奖品（epic=金光 rare=紫光）。点一下可跳过。
+const revealEl = document.getElementById('revealFx');
+let revealTimer = 0;
+function showReveal(title, sub, rare, emoji){
+  revealEl.classList.remove('hidden', 'epic', 'rare');
+  if(rare) revealEl.classList.add(rare);
+  const box = document.getElementById('revealBox'), prize = document.getElementById('revealPrize');
+  box.style.display = ''; box.textContent = emoji || '🎁';
+  prize.style.display = 'none';
+  prize.querySelector('.rTitle').textContent = title;
+  prize.querySelector('.rSub').textContent = sub || '';
+  clearTimeout(revealTimer);
+  revealTimer = setTimeout(() => {   // 抖完揭晓
+    box.style.display = 'none';
+    prize.style.display = 'flex';
+    sfx.power();
+    revealTimer = setTimeout(() => revealEl.classList.add('hidden'), 1700);
+  }, 700);
+}
+revealEl.addEventListener('click', () => { clearTimeout(revealTimer); revealEl.classList.add('hidden'); });
 let lastGachaMsg = '';   // 上一次抽奖结果（显示在抽奖行里）
 shopList.addEventListener('click', e => {
   const b = e.target.closest('button');
@@ -5625,26 +5709,27 @@ shopList.addEventListener('click', e => {
       const cid = unownedChars[Math.floor(Math.random() * unownedChars.length)];
       save.chars.push(cid); save.char = cid;
       msg = '🎊🎊 抽中稀有角色：' + CHARS[cid].name + '！已自动出战';
-      sfx.power(); setTimeout(() => sfx.power(), 250);
+      showReveal('🎊 稀有角色：' + CHARS[cid].name, '6%的欧皇！已自动出战', 'epic');
     } else if(roll < 0.18 && unownedSkins.length){   // 12% 皮肤
       const pick = unownedSkins[Math.floor(Math.random() * unownedSkins.length)];
       (save.skins[pick.cid] = save.skins[pick.cid] || []).push(pick.sk.id);
       save.skinOn[pick.cid] = pick.sk.id;
       msg = '🎉 抽中皮肤：' + CHARS[pick.cid].name + '·' + pick.sk.name;
-      sfx.power();
+      showReveal('🎉 新皮肤：' + pick.sk.name, CHARS[pick.cid].name + ' 已自动穿上', 'rare');
     } else if(roll < 0.30){                          // 12% 钻石
       save.gems += 1;
       msg = '💎 钻石 ×1';
-      sfx.power();
+      showReveal('💎 钻石 ×1', '攒着换高级伙伴', 'rare');
     } else if(roll < 0.52){                          // 22% 免费冲刺券
       pendingSprint = Math.max(pendingSprint, 500);
       msg = '🚀 免费开局冲刺 500 米券（下一局自动生效）';
-      sfx.power();
+      showReveal('🚀 冲刺券 500 米', '下一局自动生效', '');
     } else {                                         // 48% 金币（有赔有赚）
       const c2 = 60 + Math.floor(Math.random() * 220);
       save.coins += c2;
       msg = '💰 金币 ×' + c2;
       sfx.coin();
+      showReveal('💰 金币 ×' + c2, c2 >= 200 ? '血赚！' : '', '');
     }
     lastGachaMsg = '🎉 上次抽中：' + msg;
     saveSave(); renderShop();
@@ -5695,7 +5780,7 @@ shopList.addEventListener('click', e => {
     const price = CHARS[g.id].price;
     if(save.coins < price){ b.textContent = '金币不够！'; setTimeout(renderShop, 900); return; }
     save.coins -= price; save.chars.push(g.id); save.char = g.id;
-    sfx.power();
+    showReveal('🦊 新伙伴：' + CHARS[g.id].name, '已自动出战！', 'epic', '🎉');   // 【界面手感】买到新角色要庆祝（号角由揭晓时刻独奏）
   }
   if(b.dataset.act === 'up'){
     const cost = g.prices[save.durLevel];
@@ -5961,6 +6046,11 @@ function renderHome(){
   giftBtn.textContent = gs === 'back' ? '🎁 领取回归礼包' : '🎁 领取礼包';
   document.getElementById('nickInput').value = save.nick || '';
   document.getElementById('signDot').classList.toggle('hidden', !canClaimSign());
+  // 【界面手感】天赋红点：兜里的钱够升任何一条天赋就亮（把"有便宜可占"晒出来）
+  try{
+    const canUp = TALENTS.some(t2 => { const pr2 = talentPrice(t2.id); return pr2 !== null && save.coins >= pr2; });
+    document.getElementById('talentDot').classList.toggle('hidden', !canUp);
+  }catch(e){}
   // 开始按钮回显已选加成：钱花到位了，看得见
   document.getElementById('homeStart').textContent =
     '▶️ 开始游戏' + (pendingSprint ? ' · 🚀' + pendingSprint + '米' : '') + (pendingShield ? ' · 🛡' : '');
@@ -6127,6 +6217,13 @@ function drawLoading(){
     lctx.fillText('R E A D Y', 80, 44);
   }
 }
+// 【界面手感】死因提示：把"最后一击"翻译成人话，死得明明白白（对新手尤其重要）
+const OB_NAMES = { rock:'石头', cactus:'仙人掌', double:'石堆', spikes:'尖刺', roller:'滚石', pendulum:'摆锤', birdLow:'飞鸟', birdHigh:'飞鸟', laser:'激光门', flame:'火焰喷口', saw:'滚锯', spiketrap:'地刺机关', hammer:'落锤', meteor:'流星', bar:'横杆', lowbar:'低栏', chaser:'巨石', boss:'恶龙' };
+function deathCause(){
+  if(game.deathBy !== 'hit') return '';
+  const n = OB_NAMES[lastHitType];
+  return n ? ('被' + n + '耗光了血，下次躲开它！') : '撞太多次没血了，稳一点！';
+}
 // 把这一局的结算信息填进 DOM 卡片
 function updateDeadCard(){
   // 【酷跑2】闯关结算卡：通关(finish)/失败(撞死掉坑) 两种样式——★评价 + 奖励 + 三星明细
@@ -6135,7 +6232,7 @@ function updateDeadCard(){
     document.getElementById('deadTitle').textContent = win ? ('第' + curStage.id + '关 · ' + curStage.name) : '挑战失败';
     document.getElementById('deadSub').textContent = win
       ? (stageStars >= 3 ? '🏆 完美三星！' : (stageStars === 2 ? '👍 两星，再加把劲！' : '过关！'))
-      : (game.deathBy === 'pit' ? '掉进坑里啦，看到坑要跳～' : '撞到障碍没血了，再试一次！');
+      : (game.deathBy === 'pit' ? '掉进坑里啦，看到坑要跳～' : (deathCause() || '撞到障碍没血了，再试一次！'));
     document.getElementById('deadScore').textContent = win
       ? '★'.repeat(stageStars) + '☆'.repeat(3 - stageStars)
       : ('第' + curStage.id + '关 · ' + curStage.name);
@@ -6158,11 +6255,12 @@ function updateDeadCard(){
     return;
   }
   const finish = dailyMode && game.deathBy === 'finish';
-  document.getElementById('deadTitle').textContent = finish ? '🏁 完赛！' : '游戏结束';
+  document.getElementById('deadTitle').textContent = finish ? '🏁 完赛！' : (game.newBest && endlessOnly() ? '🎉 新纪录诞生！' : '游戏结束');
   const nearMiss = endlessOnly() && !game.newBest && game.startBest > 0 && game.score >= game.startBest * 0.85;
   document.getElementById('deadSub').textContent =
     nearMiss ? '就差 ' + (game.startBest - game.score + 1) + ' 分破纪录！' :
-    (game.newBest && endlessOnly() ? '🎉 新纪录！' : (game.deathBy === 'pit' ? '掉进坑里啦，看到坑要跳～' : ''));
+    (game.newBest && endlessOnly() ? '比之前的最高纪录多 ' + Math.max(1, game.score - game.startBest) + ' 分！'
+                                   : (game.deathBy === 'pit' ? '掉进坑里啦，看到坑要跳～' : deathCause()));
   document.getElementById('deadScore').textContent = game.score + ' 分';
   let stats;
   if(dailyMode){
@@ -6445,7 +6543,21 @@ function frame(t){
   // 死亡结算：DOM 卡片统一承载（死后 0.6 秒淡入，先看清自己怎么死的）
   const showDead = game.state === 'dead' && bgTime - game.deadAt > 0.6 && !shopOpen();
   deadEl.classList.toggle('hidden', !showDead);
+  if(showDead && !deadShownAt){   // 【界面手感】结算卡刚亮：记时刻（驱动滚分）；破纪录再撒一波彩花
+    deadShownAt = performance.now();
+    if(game.newBest && endlessOnly()){
+      burst(W / 2, H * 0.3, 30, ['#ffd34d', '#ff8aa0', '#7df9ff', '#ffffff'], 'coin');
+      ringFx(W / 2, H * 0.35, '#ffd34d');
+    }
+  }
   if(showDead){
+    if(!adventureMode){   // 【界面手感】分数滚动跳字：0.9秒从0滚到最终分（比一次性拍脸上有仪式感）
+      const tk = Math.min(1, (performance.now() - deadShownAt) / 900);
+      const te = 1 - Math.pow(1 - tk, 3);
+      const el2 = document.getElementById('deadScore');
+      const txt2 = Math.round(game.score * te) + ' 分';
+      if(el2.textContent !== txt2) el2.textContent = txt2;
+    }
     const adv = adventureMode && curStage;   // 【酷跑2】闯关结算：自成一套按钮（下一关/重玩/回主页），不摆复活/复制
     const revFree = !save.freeReviveUsed;
     const revCost = reviveCost();   // 【酷跑2】复活价含重生天赋折扣（与 revive() 收费口径一致）
