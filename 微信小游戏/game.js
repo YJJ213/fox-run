@@ -4288,7 +4288,7 @@ function drawPlayer(){
   // 【死亡小剧场】只有撞死(hit)才翻滚——完赛过关(finish)是胜利，不许装死！
   //   绕"身体中心"转，轴心跟着变大药水放大（不然巨型狐狸躺平时头会埋进地里）
   if(game.state === 'dead' && game.deathBy === 'hit'){
-    ctx.translate(0, -20 * gs); ctx.rotate(p.deadSpin); ctx.translate(0, 20 * gs);
+    ctx.translate(0, -23.5 * gs); ctx.rotate(p.deadSpin); ctx.translate(0, 23.5 * gs);
   }
   // 注意：旋转都放在 scale 之前——先压扁再旋转会把形状"拧歪"（斜切变形）
   poseRotate();   // 滑铲前倾 / 滑翔 / 二段跳空翻 / 随抛物线俯仰（和残影同一份逻辑）
@@ -4344,7 +4344,7 @@ function drawPlayer(){
         pal: dailyMode ? CHARS.fox.c : charC(save.char),
       });
       ctx.strokeStyle = '#ffe9a0'; ctx.lineWidth = 3;   // 头顶光环
-      ctx.beginPath(); ctx.ellipse(10, -58, 14, 4.5, 0, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(10, -63, 14, 4.5, 0, 0, TAU); ctx.stroke();
       ctx.restore();
     }
   }
@@ -4400,18 +4400,18 @@ function drawPlayer(){
   }
   // 护盾：升级成真"泡泡"——淡蓝气泡内胆 + 呼吸描边 + 左上高光弧（原来只是一根细线圈）
   if(shieldOn){
-    const scx = p.x + p.w / 2, scy = p.y - p.h / 2;
-    const sg = ctx.createRadialGradient(scx, scy, 12, scx, scy, 37);
+    const scx = p.x + p.w / 2, scy = p.y + bobY - p.h / 2;   // 【角色2.0】跟着颠簸走，耳朵不穿盾
+    const sg = ctx.createRadialGradient(scx, scy, 12, scx, scy, 41);
     sg.addColorStop(0, 'rgba(140,200,255,0)');
     sg.addColorStop(0.8, 'rgba(140,200,255,0.10)');
     sg.addColorStop(1, 'rgba(160,215,255,0.28)');
     ctx.fillStyle = sg;
-    ctx.beginPath(); ctx.arc(scx, scy, 37, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(scx, scy, 41, 0, TAU); ctx.fill();
     ctx.strokeStyle = 'rgba(140,200,255,' + (0.65 + 0.25 * Math.sin(bgTime * 6)) + ')';
     ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(scx, scy, 36, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(scx, scy, 40, 0, TAU); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.arc(scx, scy, 30, -2.4, -1.7); ctx.stroke();   // 高光弧
+    ctx.beginPath(); ctx.arc(scx, scy, 33, -2.4, -1.7); ctx.stroke();   // 高光弧
   }
   // 【酷跑2】萌宠：当前出战的伙伴飘在身后上方，随技能触发有特效
   drawPet(p);
@@ -4422,7 +4422,7 @@ function drawPlayer(){
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
     for(let i = 0; i < remain; i++){
       ctx.beginPath();
-      ctx.arc(p.x + p.w / 2 - (remain - 1) * 5 + i * 10, p.y - p.h * gs - 14, 3, 0, TAU);
+      ctx.arc(p.x + p.w / 2 - (remain - 1) * 5 + i * 10, p.y - 59 * gs, 3, 0, TAU);
       ctx.fill();
     }
   }
@@ -4484,58 +4484,71 @@ function drawCharacter(c, ch, o){
     c.fillStyle = col.belly;
     c.beginPath(); c.ellipse(2, -13, 12, 8, 0, 0, TAU); c.fill();
   }
-  function eye(ex, ey){
+  function eye(ex, ey, s){   // 【角色2.0】s=眼睛整体缩放（狐狸系大亮眼传>1，其他角色不传=原样）
+    s = s || 1;
     if(o.dead){
-      c.strokeStyle = '#43281a'; c.lineWidth = 2.5;
+      c.strokeStyle = '#43281a'; c.lineWidth = 2.5 * s;
       c.beginPath();
-      c.moveTo(ex - 3.5, ey - 3); c.lineTo(ex + 3.5, ey + 3);
-      c.moveTo(ex + 3.5, ey - 3); c.lineTo(ex - 3.5, ey + 3);
+      c.moveTo(ex - 3.5 * s, ey - 3 * s); c.lineTo(ex + 3.5 * s, ey + 3 * s);
+      c.moveTo(ex + 3.5 * s, ey - 3 * s); c.lineTo(ex - 3.5 * s, ey + 3 * s);
       c.stroke();
     } else if(o.face === 'hurt'){
       // 痛！眼睛挤成 "＞"，旁边飞出一滴冷汗
-      c.strokeStyle = '#43281a'; c.lineWidth = 2.5; c.lineCap = 'round';
+      c.strokeStyle = '#43281a'; c.lineWidth = 2.5 * s; c.lineCap = 'round';
       c.beginPath();
-      c.moveTo(ex - 4, ey - 4); c.lineTo(ex + 3, ey); c.lineTo(ex - 4, ey + 4);
+      c.moveTo(ex - 4 * s, ey - 4 * s); c.lineTo(ex + 3 * s, ey); c.lineTo(ex - 4 * s, ey + 4 * s);
       c.stroke();
       c.fillStyle = 'rgba(110,170,255,0.95)';
       c.beginPath();
-      c.moveTo(ex - 9, ey - 12);
-      c.quadraticCurveTo(ex - 5, ey - 9, ex - 8, ey - 6);
-      c.quadraticCurveTo(ex - 12, ey - 9, ex - 9, ey - 12);
+      c.moveTo(ex - 9 * s, ey - 12 * s);
+      c.quadraticCurveTo(ex - 5 * s, ey - 9 * s, ex - 8 * s, ey - 6 * s);
+      c.quadraticCurveTo(ex - 12 * s, ey - 9 * s, ex - 9 * s, ey - 12 * s);
       c.fill();
     } else if(o.face === 'joy'){
       // 开心！眼睛弯成月牙，旁边冒小星星
-      c.strokeStyle = '#43281a'; c.lineWidth = 2.5; c.lineCap = 'round';
-      c.beginPath(); c.arc(ex, ey + 2, 4.5, Math.PI, TAU); c.stroke();
-      sparkle(ex + 9, ey - 10, 3);
-      sparkle(ex - 11, ey - 7, 2.2);
+      c.strokeStyle = '#43281a'; c.lineWidth = 2.5 * s; c.lineCap = 'round';
+      c.beginPath(); c.arc(ex, ey + 2 * s, 4.5 * s, Math.PI, TAU); c.stroke();
+      sparkle(ex + 9 * s, ey - 10 * s, 3);
+      sparkle(ex - 11 * s, ey - 7 * s, 2.2);
     } else if(o.face === 'focus'){
       // 【酷跑1】专注！眼睛眯成一道坚定的细线、上方压一道斜眉（下滑冲刺时的表情）
-      c.strokeStyle = '#43281a'; c.lineWidth = 2.6; c.lineCap = 'round';
-      c.beginPath(); c.moveTo(ex - 4, ey + 1); c.lineTo(ex + 4, ey + 1); c.stroke();   // 眯眼细线
-      c.lineWidth = 2.2;
-      c.beginPath(); c.moveTo(ex - 5, ey - 5); c.lineTo(ex + 2, ey - 3); c.stroke();   // 斜压的眉毛
+      c.strokeStyle = '#43281a'; c.lineWidth = 2.6 * s; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(ex - 4 * s, ey + s); c.lineTo(ex + 4 * s, ey + s); c.stroke();   // 眯眼细线
+      c.lineWidth = 2.2 * s;
+      c.beginPath(); c.moveTo(ex - 5 * s, ey - 5 * s); c.lineTo(ex + 2 * s, ey - 3 * s); c.stroke();   // 斜压的眉毛
     } else if(o.face === 'proud'){
       // 【灵动】得意！下弯眯眼 + 挑起的眉毛（连击狂热时：本狐可是职业的）
-      c.strokeStyle = '#43281a'; c.lineWidth = 2.5; c.lineCap = 'round';
-      c.beginPath(); c.moveTo(ex - 4, ey); c.quadraticCurveTo(ex, ey + 3.5, ex + 4, ey); c.stroke();   // ∪形眯眼
-      c.lineWidth = 2;
-      c.beginPath(); c.moveTo(ex - 4, ey - 6); c.lineTo(ex + 3, ey - 7.5); c.stroke();   // 上挑的眉毛
+      c.strokeStyle = '#43281a'; c.lineWidth = 2.5 * s; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(ex - 4 * s, ey); c.quadraticCurveTo(ex, ey + 3.5 * s, ex + 4 * s, ey); c.stroke();   // ∪形眯眼
+      c.lineWidth = 2 * s;
+      c.beginPath(); c.moveTo(ex - 4 * s, ey - 6 * s); c.lineTo(ex + 3 * s, ey - 7.5 * s); c.stroke();   // 上挑的眉毛
     } else if(o.face === 'fear'){
       // 【灵动】害怕！瞳孔缩成小点 + 一滴冷汗（血快空 / 巨石追到屁股后头）
       c.fillStyle = '#fff';
-      c.beginPath(); c.arc(ex, ey, 4.5, 0, TAU); c.fill();
+      c.beginPath(); c.arc(ex, ey, 4.5 * s, 0, TAU); c.fill();
       c.fillStyle = '#2a1505';
-      c.beginPath(); c.arc(ex + 1, ey, 1.2, 0, TAU); c.fill();
+      c.beginPath(); c.arc(ex + s, ey, 1.2 * s, 0, TAU); c.fill();
       c.fillStyle = 'rgba(110,170,255,0.95)';
       c.beginPath();
-      c.moveTo(ex - 8, ey - 11);
-      c.quadraticCurveTo(ex - 4, ey - 8, ex - 7, ey - 5);
-      c.quadraticCurveTo(ex - 11, ey - 8, ex - 8, ey - 11);
+      c.moveTo(ex - 8 * s, ey - 11 * s);
+      c.quadraticCurveTo(ex - 4 * s, ey - 8 * s, ex - 7 * s, ey - 5 * s);
+      c.quadraticCurveTo(ex - 11 * s, ey - 8 * s, ex - 8 * s, ey - 11 * s);
       c.fill();
     } else if(o.blinking > 0){
-      c.strokeStyle = '#43281a'; c.lineWidth = 2;
-      c.beginPath(); c.moveTo(ex - 4, ey); c.lineTo(ex + 3, ey); c.stroke();
+      c.strokeStyle = '#43281a'; c.lineWidth = 2 * s;
+      c.beginPath(); c.moveTo(ex - 4 * s, ey); c.lineTo(ex + 3 * s, ey); c.stroke();
+    } else if(s > 1){
+      // 【角色2.0】大亮眼：深棕大圆瞳 + 双高光——设定图同款，"灵气"全在这只眼睛里
+      c.fillStyle = '#fff';
+      c.beginPath(); c.arc(ex, ey, 4.6 * s, 0, TAU); c.fill();
+      const eg = c.createRadialGradient(ex - s, ey - 1.5 * s, 0.5, ex, ey, 4 * s);
+      eg.addColorStop(0, '#4a2c12'); eg.addColorStop(1, '#1f0e03');
+      c.fillStyle = eg;
+      c.beginPath(); c.arc(ex + 0.3 * s, ey + 0.2 * s, 3.9 * s, 0, TAU); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.95)';
+      c.beginPath(); c.arc(ex - 1.1 * s, ey - 1.3 * s, 1.5 * s, 0, TAU); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.65)';
+      c.beginPath(); c.arc(ex + 1.5 * s, ey + 1.5 * s, 0.8 * s, 0, TAU); c.fill();
     } else {
       c.fillStyle = '#fff';
       c.beginPath(); c.arc(ex, ey, 4.5, 0, TAU); c.fill();
@@ -4581,14 +4594,23 @@ function drawCharacter(c, ch, o){
       c.beginPath(); c.arc(mx, my - 2.5, 3.2, 0.5, Math.PI - 0.5); c.stroke();
     }
   }
-  function scarfTails(){   // 飘在身后的围巾：滑翔时往上扬，平时随风摆，【灵动】高速时被风吹平、摆幅变小
+  function scarfTails(nx, ny){   // 飘在身后的围巾：滑翔上扬/随风摆/高速吹平；狐狸2.0传脖根坐标=下垂飘布版
+    const v2 = nx !== undefined;
     c.save();
-    c.translate(-14, -28);
-    c.rotate((o.gliding ? -0.7 : 0.15) - (o.lean || 0) * 0.18 + Math.sin(t * 7) * 0.14 * (1 - (o.lean || 0) * 0.4));
+    c.translate(v2 ? nx : -14, v2 ? ny : -28);
     c.fillStyle = col.scarf;
-    crr(-22, -2, 22, 7, 3); c.fill();
-    c.rotate(0.3);
-    crr(-16, 3, 16, 6, 3); c.fill();
+    if(v2){   // 两截自然下垂的飘带 + 描边，高速时被风抬平
+      c.rotate((o.gliding ? -0.7 : 0.10 + (o.lean || 0) * 0.08) + Math.sin(t * 7) * 0.14 * (1 - (o.lean || 0) * 0.4));
+      c.strokeStyle = 'rgba(56,28,8,0.5)'; c.lineWidth = 2;
+      crr(-18, -2, 18, 6.5, 3); c.fill(); c.stroke();
+      c.rotate(-0.48);
+      crr(-13, 1, 13, 5.5, 3); c.fill(); c.stroke();
+    } else {
+      c.rotate((o.gliding ? -0.7 : 0.15) - (o.lean || 0) * 0.18 + Math.sin(t * 7) * 0.14 * (1 - (o.lean || 0) * 0.4));
+      crr(-22, -2, 22, 7, 3); c.fill();
+      c.rotate(0.3);
+      crr(-16, 3, 16, 6, 3); c.fill();
+    }
     c.restore();
   }
   function scarfKnot(){    // 脖子后的围巾结，画在身体之上
@@ -4611,119 +4633,210 @@ function drawCharacter(c, ch, o){
   }
 
   if(ch.kind === 'fox'){
-    // —— 狐狸（橙狐 / 雪狐）——
-    c.save();   // 大尾巴
-    c.translate(-19, -14);
-    c.rotate(-0.4 - wag * 0.5 + (o.gliding ? 0.45 : 0));
+    // —— 狐狸 2.0（橙狐/雪狐/星河狐）：照官方设定图重塑——大头身比 + 奶白口鼻 + 眉点 + 大亮眼 ——
+    const OL = 'rgba(56,28,8,0.5)';   // 统一深棕描边：整只狐狸一根线条语言，告别"各画各的"
+    const olStroke = () => { c.strokeStyle = OL; c.lineWidth = 2; c.stroke(); };
+    c.save();   // 大尾巴：往上翘的蓬松双弧 + 白尾尖（上扬才有奔跑的精气神）
+    c.translate(-14, -14);
+    c.rotate(-0.35 - wag * 0.5 + (o.gliding ? 0.45 : 0));
     c.fillStyle = col.tail;
     c.beginPath();
-    c.moveTo(0, 4); c.quadraticCurveTo(-20, 2, -24, -10); c.quadraticCurveTo(-10, -12, 0, -4);
-    c.closePath(); c.fill();
-    c.fillStyle = '#fff';
+    c.moveTo(0, 5);
+    c.quadraticCurveTo(-15, 5, -21, -5);
+    c.quadraticCurveTo(-25, -14, -17, -18);
+    c.quadraticCurveTo(-7, -14, 0, -4);
+    c.closePath(); c.fill(); olStroke();
+    c.fillStyle = '#fff';   // 白尾尖
     c.beginPath();
-    c.moveTo(-24, -10); c.quadraticCurveTo(-19, -12, -15, -9.5); c.quadraticCurveTo(-19, -6, -24, -10);
+    c.moveTo(-13.5, -16.8);
+    c.quadraticCurveTo(-24.5, -14.5, -20.5, -6);
+    c.quadraticCurveTo(-15.5, -8.5, -13.5, -16.8);
     c.closePath(); c.fill();
     c.restore();
-    scarfTails();
+    scarfTails(-5, -28.5);   // 围巾飘带（2.0 脖根在头后上方，衬着天空才看得清）
     legs();
-    body();
-    scarfKnot();
-    belly();
-    // 【灵动】软耳朵：整只耳朵绕耳根转 earA（落地下折/起跳后掠/跑步小颤，本体传入；待机再叠抖耳）
+    { // 身体：小圆豆——"头大身小"的头身比全靠它衬
+      const bg2 = c.createLinearGradient(0, -27, 0, -6);
+      bg2.addColorStop(0, col.body); bg2.addColorStop(1, col.body2);
+      c.fillStyle = bg2;
+      crr(-19, -27, 34, 21, 11); c.fill(); olStroke();
+    }
+    c.fillStyle = col.belly;   // 奶白肚皮
+    c.beginPath(); c.ellipse(5, -13.5, 9, 6, -0.08, 0, TAU); c.fill();
+    c.fillStyle = col.scarf;   // 围巾结：脖子后一颗圆结
+    c.beginPath(); c.arc(-7, -27.5, 4.5, 0, TAU); c.fill(); olStroke();
+    // 耳朵画在头下层：耳根被头盖住，耳朵才是"长"在头上而不是"贴"在头上
     const eA = (o.earA || 0) + idleEar;
-    c.fillStyle = col.body;   // 尖耳朵（前耳）
-    c.save(); c.translate(9, -33.5); c.rotate(eA);
-    tri(-5, -0.5, 0, -12.5, 5, 0.5);
-    c.fillStyle = col.ear;
-    tri(-2, -1.5, 0.5, -7.5, 3, -1.5);
+    c.save(); c.translate(3, -40); c.rotate(eA);   // 前耳
+    c.fillStyle = col.body;
+    c.beginPath(); c.moveTo(-6.5, 3); c.quadraticCurveTo(-6, -8, -1, -13.5); c.quadraticCurveTo(4.5, -8, 5.5, 3); c.closePath();
+    c.fill(); olStroke();
+    c.fillStyle = col.ear || col.dark;   // 内耳
+    c.beginPath(); c.moveTo(-3.5, 1.5); c.quadraticCurveTo(-2.8, -5, -1, -9); c.quadraticCurveTo(1.8, -5, 2.6, 1.5); c.closePath(); c.fill();
     c.restore();
-    c.fillStyle = col.body;   // 后耳：角度放大一点，两只耳朵别像焊死的一对
-    c.save(); c.translate(17.5, -32.5); c.rotate(eA * 1.25);
-    tri(-4.5, -0.5, 0.5, -11.5, 4.5, 0.5);
+    c.save(); c.translate(16.5, -39); c.rotate(eA * 1.25);   // 后耳：角度放大一点，别像焊死的一对
+    c.fillStyle = col.body;
+    c.beginPath(); c.moveTo(-6, 3); c.quadraticCurveTo(-5.5, -7, -0.5, -12); c.quadraticCurveTo(4, -7, 5, 3); c.closePath();
+    c.fill(); olStroke();
+    c.fillStyle = col.ear || col.dark;
+    c.beginPath(); c.moveTo(-3, 1.5); c.quadraticCurveTo(-2.4, -4, -0.5, -7.5); c.quadraticCurveTo(1.6, -4, 2.2, 1.5); c.closePath(); c.fill();
     c.restore();
-    eye(12, -24);
-    c.fillStyle = '#5b2d0e';   // 鼻子
-    c.beginPath(); c.arc(21, -18, 2.5, 0, TAU); c.fill();
-    if(!o.avatar) mouth(18.5, -13);   // 【灵动】嘴巴（真人头像模式脸被照片盖住，不画）
+    { // 大头：径向渐变（左上受光）+ 统一描边——设定图的头身比核心
+      const hg2 = c.createRadialGradient(4, -36, 3, 10, -29, 17);
+      hg2.addColorStop(0, col.body); hg2.addColorStop(1, col.body2);
+      c.fillStyle = hg2;
+      c.beginPath(); c.arc(10, -29, 15, 0, TAU); c.fill(); olStroke();
+    }
+    c.fillStyle = col.body2;   // 后脑勺颊毛：两撮往后翘的小尖毛，剪影更"狐"
+    tri(-4.5, -33, -11, -35.5, -3.5, -28.5);
+    tri(-5, -26.5, -12, -26, -3.5, -21.5);
+    if(!o.avatar){   // 【角色2.0】照片头像自己就是脸：吻部/眼/鼻不画，免得从贴纸边缘露出来
+    c.fillStyle = col.belly;   // 奶白口鼻（往前凸出一点，侧脸才有"吻部"）
+    c.beginPath(); c.ellipse(19, -22.5, 8.6, 7.2, 0.12, 0, TAU); c.fill();
+    c.fillStyle = col.belly;   // 眉点（柴犬同款小奶点）
+    c.beginPath(); c.ellipse(7.5, -36.5, 2.6, 1.6, 0.25, 0, TAU); c.fill();
+    if(!o.dead){   // 淡淡腮红
+      c.fillStyle = 'rgba(255,110,130,0.20)';
+      c.beginPath(); c.arc(4, -20.5, 3.2, 0, TAU); c.fill();
+    }
+    eye(9.5, -28, 1.25);
+    c.fillStyle = '#43281a';   // 鼻头（吻部尖上）
+    c.beginPath(); c.ellipse(26.3, -24.8, 2.6, 2.1, 0.35, 0, TAU); c.fill();
+    mouth(19, -17);
+    }   // 【灵动】嘴巴画在口鼻上（真人头像模式脸被照片盖住，不画）
   } else if(ch.kind === 'pig'){
-    // —— 小猪 ——
+    // —— 小猪 2.0：大圆头 + 耷拉软耳 + 凸出的大粉鼻 ——
+    const OL = 'rgba(130,50,80,0.4)';
+    const olStroke = () => { c.strokeStyle = OL; c.lineWidth = 2; c.stroke(); };
     c.save();   // 卷卷的猪尾巴
-    c.translate(-21, -20);
+    c.translate(-20, -18);
     c.strokeStyle = col.dark; c.lineWidth = 3.5; c.lineCap = 'round';
     c.beginPath(); c.arc(-4, 0, 4.5, -0.5 + Math.sin(t * 6) * 0.2, 4.2); c.stroke();
     c.restore();
-    scarfTails();
+    scarfTails(-5, -28.5);
     legs();
-    body(16);   // 更圆润
-    scarfKnot();
-    c.fillStyle = col.belly;
-    c.beginPath(); c.ellipse(0, -13, 13, 8, 0, 0, TAU); c.fill();
-    c.fillStyle = col.body;   // 耷拉的耳朵
-    tri(2, -33, 6, -45, 13, -32);
-    tri(12, -32, 17, -44, 22, -31);
-    c.fillStyle = col.dark;   // 耳朵尖
-    tri(4.5, -38, 6, -45, 9, -37);
-    eye(8, -25);
-    c.fillStyle = col.snout;   // 猪鼻子
-    c.beginPath(); c.ellipse(17, -20, 6.5, 5, 0, 0, TAU); c.fill();
-    c.strokeStyle = 'rgba(0,0,0,0.15)'; c.lineWidth = 1.5;
-    c.beginPath(); c.ellipse(17, -20, 6.5, 5, 0, 0, TAU); c.stroke();
+    { const bg2 = c.createLinearGradient(0, -27, 0, -6);
+      bg2.addColorStop(0, col.body); bg2.addColorStop(1, col.body2);
+      c.fillStyle = bg2; crr(-19, -27, 34, 21, 12); c.fill(); olStroke(); }
+    c.fillStyle = col.belly;   // 肚皮
+    c.beginPath(); c.ellipse(5, -13.5, 9, 6, -0.08, 0, TAU); c.fill();
+    c.fillStyle = col.scarf;   // 围巾结
+    c.beginPath(); c.arc(-7, -27.5, 4.5, 0, TAU); c.fill(); olStroke();
+    const eA = (o.earA || 0) + idleEar;
+    c.save(); c.translate(3, -40); c.rotate(eA - 0.15);   // 耷拉的前耳（自带下垂角）
+    c.fillStyle = col.body2;
+    c.beginPath(); c.moveTo(-6, 2.5); c.quadraticCurveTo(-7, -8, -1, -11); c.quadraticCurveTo(6, -6, 6.5, 4); c.closePath();
+    c.fill(); olStroke();
+    c.restore();
+    c.save(); c.translate(16.5, -38.5); c.rotate((eA - 0.15) * 1.25);   // 后耳
+    c.fillStyle = col.body2;
+    c.beginPath(); c.moveTo(-5.5, 2.5); c.quadraticCurveTo(-6.5, -7, -0.5, -10); c.quadraticCurveTo(5.5, -5.5, 6, 4); c.closePath();
+    c.fill(); olStroke();
+    c.restore();
+    { const hg2 = c.createRadialGradient(4, -36, 3, 10, -29, 17);   // 大头
+      hg2.addColorStop(0, col.body); hg2.addColorStop(1, col.body2);
+      c.fillStyle = hg2;
+      c.beginPath(); c.arc(10, -29, 15, 0, TAU); c.fill(); olStroke(); }
+    if(!o.dead){   // 猪猪腮红厚一点
+      c.fillStyle = 'rgba(255,90,130,0.30)';
+      c.beginPath(); c.arc(3, -20.5, 3.4, 0, TAU); c.fill();
+    }
+    if(!o.avatar){   // 【角色2.0】照片头像不画眼/猪鼻
+    eye(8.5, -28, 1.2);
+    c.fillStyle = col.snout;   // 大猪鼻：凸出脸前才是猪
+    c.beginPath(); c.ellipse(22, -23, 6.8, 5.4, 0.1, 0, TAU); c.fill(); olStroke();
     c.fillStyle = col.dark;   // 鼻孔
-    c.beginPath(); c.arc(15, -20, 1.2, 0, TAU); c.fill();
-    c.beginPath(); c.arc(19.5, -20, 1.2, 0, TAU); c.fill();
-    c.fillStyle = 'rgba(255,120,160,0.35)';   // 腮红
-    c.beginPath(); c.arc(4, -17, 3, 0, TAU); c.fill();
+    c.beginPath(); c.arc(19.8, -23.4, 1.3, 0, TAU); c.fill();
+    c.beginPath(); c.arc(24.4, -22.6, 1.3, 0, TAU); c.fill();
+    }
   } else if(ch.kind === 'monkey'){
-    // —— 小猴 ——
+    // —— 小猴 2.0：大圆头 + 浅色脸蛋 + 圆耳呆毛 + 长卷尾 ——
+    const OL = 'rgba(70,40,18,0.45)';
+    const olStroke = () => { c.strokeStyle = OL; c.lineWidth = 2; c.stroke(); };
     c.strokeStyle = col.body; c.lineWidth = 5; c.lineCap = 'round';   // 甩来甩去的长尾巴
     c.beginPath();
-    c.moveTo(-18, -12);
-    c.quadraticCurveTo(-34, -14, -31, -30 + Math.sin(t * 8) * 2);
+    c.moveTo(-17, -12);
+    c.quadraticCurveTo(-33, -14, -30, -30 + Math.sin(t * 8) * 2);
     c.stroke();
     c.strokeStyle = col.dark; c.lineWidth = 4;
-    c.beginPath(); c.arc(-29, -32 + Math.sin(t * 8) * 2, 3.5, 0.5, 4.5); c.stroke();
-    scarfTails();
+    c.beginPath(); c.arc(-28, -32 + Math.sin(t * 8) * 2, 3.5, 0.5, 4.5); c.stroke();
+    scarfTails(-5, -28.5);
     legs();
-    body();
-    scarfKnot();
-    belly();
-    c.fillStyle = col.body;   // 圆耳朵
-    c.beginPath(); c.arc(2, -35, 5.5, 0, TAU); c.fill();
+    { const bg2 = c.createLinearGradient(0, -27, 0, -6);
+      bg2.addColorStop(0, col.body); bg2.addColorStop(1, col.body2);
+      c.fillStyle = bg2; crr(-19, -27, 34, 21, 11); c.fill(); olStroke(); }
+    c.fillStyle = col.belly;
+    c.beginPath(); c.ellipse(5, -13.5, 9, 6, -0.08, 0, TAU); c.fill();
+    c.fillStyle = col.scarf;
+    c.beginPath(); c.arc(-7, -27.5, 4.5, 0, TAU); c.fill(); olStroke();
+    { const hg2 = c.createRadialGradient(4, -36, 3, 10, -29, 17);   // 大头
+      hg2.addColorStop(0, col.body); hg2.addColorStop(1, col.body2);
+      c.fillStyle = hg2;
+      c.beginPath(); c.arc(10, -29, 15, 0, TAU); c.fill(); olStroke(); }
+    c.fillStyle = col.body;   // 圆耳朵（侧脸这只画在头上层，才像长在头侧）
+    c.beginPath(); c.arc(-2, -32, 6, 0, TAU); c.fill(); olStroke();
     c.fillStyle = col.face;
-    c.beginPath(); c.arc(2, -35, 3, 0, TAU); c.fill();
-    c.fillStyle = col.face;   // 浅色的口鼻
-    c.beginPath(); c.ellipse(15, -21, 8, 7, 0, 0, TAU); c.fill();
+    c.beginPath(); c.arc(-2.5, -32, 3.2, 0, TAU); c.fill();
     c.fillStyle = col.body;   // 头顶一撮呆毛
-    tri(10, -36, 13, -45, 16, -36);
-    eye(11, -26);
+    tri(8, -43.5, 11.5, -52, 15, -43);
+    c.fillStyle = col.face;   // 浅色脸蛋
+    c.beginPath(); c.ellipse(15, -25, 10.5, 8.5, 0.15, 0, TAU); c.fill();
+    if(!o.dead){
+      c.fillStyle = 'rgba(255,110,110,0.22)';
+      c.beginPath(); c.arc(7, -19.5, 3, 0, TAU); c.fill();
+    }
+    if(!o.avatar){   // 【角色2.0】照片头像不画眼/口鼻
+    eye(12, -26, 1.2);
     c.fillStyle = '#5b3a22';   // 鼻孔和笑嘴
-    c.beginPath(); c.arc(17, -21, 1.3, 0, TAU); c.fill();
-    c.strokeStyle = '#5b3a22'; c.lineWidth = 1.5;
-    c.beginPath(); c.arc(16, -18, 3, 0.2, Math.PI - 0.4); c.stroke();
+    c.beginPath(); c.arc(20, -24, 1.3, 0, TAU); c.fill();
+    c.strokeStyle = '#5b3a22'; c.lineWidth = 1.5; c.lineCap = 'round';
+    c.beginPath(); c.arc(18.5, -20.5, 3, 0.2, Math.PI - 0.4); c.stroke();
+    }
   } else if(ch.kind === 'panda'){
-    // —— 大熊猫：黑耳朵黑眼圈，国宝亲自跑酷 ——
-    scarfTails();
+    // —— 大熊猫 2.0：大白头 + 黑圆耳黑眼圈 + 小白尾，国宝亲自跑酷 ——
+    const OL = 'rgba(35,35,35,0.4)';
+    const olStroke = () => { c.strokeStyle = OL; c.lineWidth = 2; c.stroke(); };
+    scarfTails(-5, -28.5);
+    c.fillStyle = col.body;   // 小圆尾
+    c.beginPath(); c.arc(-18.5, -15, 3.8, 0, TAU); c.fill(); olStroke();
     legs();
-    body(16);
-    scarfKnot();
-    belly();
-    c.fillStyle = col.patch;   // 圆黑耳朵
-    c.beginPath(); c.arc(4, -38, 6, 0, TAU); c.fill();
-    c.beginPath(); c.arc(19, -36, 6, 0, TAU); c.fill();
-    c.beginPath(); c.ellipse(12, -25, 6, 7, 0.3, 0, TAU); c.fill();   // 黑眼圈
-    eye(12, -25);
+    { const bg2 = c.createLinearGradient(0, -27, 0, -6);
+      bg2.addColorStop(0, col.body); bg2.addColorStop(1, col.body2);
+      c.fillStyle = bg2; crr(-19, -27, 34, 21, 12); c.fill(); olStroke(); }
+    c.fillStyle = col.belly;
+    c.beginPath(); c.ellipse(5, -13.5, 9, 6, -0.08, 0, TAU); c.fill();
+    c.fillStyle = col.scarf;
+    c.beginPath(); c.arc(-7, -27.5, 4.5, 0, TAU); c.fill(); olStroke();
+    c.fillStyle = col.patch;   // 黑圆耳（头下层，露出月牙）
+    c.beginPath(); c.arc(1, -41, 6.5, 0, TAU); c.fill(); olStroke();
+    c.beginPath(); c.arc(20, -40.5, 6, 0, TAU); c.fill(); olStroke();
+    { const hg2 = c.createRadialGradient(4, -36, 3, 10, -29, 17);   // 大白头
+      hg2.addColorStop(0, col.body); hg2.addColorStop(1, col.body2);
+      c.fillStyle = hg2;
+      c.beginPath(); c.arc(10, -29, 15, 0, TAU); c.fill(); olStroke(); }
+    c.fillStyle = col.patch;   // 黑眼圈
+    c.beginPath(); c.ellipse(10, -27, 6.6, 7.6, 0.28, 0, TAU); c.fill();
+    if(!o.dead){
+      c.fillStyle = 'rgba(255,110,130,0.25)';
+      c.beginPath(); c.arc(2, -19.5, 3, 0, TAU); c.fill();
+    }
+    if(!o.avatar){   // 【角色2.0】照片头像不画眼/鼻
+    eye(10, -27, 1.15);
     c.fillStyle = col.patch;   // 鼻子
-    c.beginPath(); c.arc(21, -17, 2.5, 0, TAU); c.fill();
-    if(!o.avatar) mouth(18.5, -12);   // 【灵动】熊猫也有嘴（其余角色自带口鼻细节，不叠画）
+    c.beginPath(); c.ellipse(23.5, -22.5, 2.6, 2.1, 0.3, 0, TAU); c.fill();
+    mouth(16.5, -18.5);
+    }   // 【灵动】熊猫也有嘴（其余角色自带口鼻细节，不叠画）
   } else if(ch.kind === 'dragon'){
-    // —— 小龙 ——
+    // —— 小龙 2.0：大头 + 白龙角 + 背刺翅膀 + 箭头尾 ——
+    const OL = 'rgba(20,80,60,0.45)';
+    const olStroke = () => { c.strokeStyle = OL; c.lineWidth = 2; c.stroke(); };
     c.fillStyle = col.body2;   // 箭头尾巴
-    tri(-20, -14, -34, -8 + Math.sin(t * 7) * 2, -22, -22);
+    tri(-18, -14, -33, -8 + Math.sin(t * 7) * 2, -20, -22);
     c.fillStyle = col.spike;
-    tri(-34, -8, -40, -4, -34, -14);
-    // 翅膀：平时小幅扇动，滑翔时完全张开
+    tri(-33, -8, -39, -4, -33, -14);
+    // 翅膀：平时小幅扇动，滑翔时完全张开（挂在身体上）
     c.save();
-    c.translate(-4, -32);
+    c.translate(-5, -25);
     c.rotate(o.gliding ? Math.sin(t * 5) * 0.1 - 0.5 : Math.sin(t * 14) * 0.25);
     const ws = o.gliding ? 1.5 : 1;
     c.scale(ws, ws);
@@ -4737,52 +4850,92 @@ function drawCharacter(c, ch, o){
     c.strokeStyle = 'rgba(0,0,0,0.15)'; c.lineWidth = 1.5; c.stroke();
     c.restore();
     legs();
-    body();
+    { const bg2 = c.createLinearGradient(0, -27, 0, -6);
+      bg2.addColorStop(0, col.body); bg2.addColorStop(1, col.body2);
+      c.fillStyle = bg2; crr(-19, -27, 34, 21, 11); c.fill(); olStroke(); }
     c.fillStyle = col.belly;   // 肚皮鳞甲
-    crr(-8, -22, 22, 14, 7); c.fill();
+    crr(-7, -21, 19, 13, 6); c.fill();
     c.fillStyle = col.spike;   // 背上的小刺
-    tri(-14, -36, -10, -44, -6, -36);
-    tri(-4, -37, 0, -46, 4, -37);
-    tri(6, -36, 10, -44, 14, -35);
-    c.fillStyle = '#fff';      // 小龙角
-    tri(14, -36, 18, -45, 21, -35);
-    eye(12, -24);
+    tri(-14, -26.5, -11, -33.5, -8, -26.5);
+    tri(-4, -27, -1, -35, 2, -27);
+    c.fillStyle = '#fff';   // 白龙角（画在头下层，角根藏进头里）
+    c.beginPath(); c.moveTo(12.5, -40.5); c.quadraticCurveTo(14, -49, 18.5, -52.5); c.quadraticCurveTo(19.5, -45, 19, -40); c.closePath();
+    c.fill(); olStroke();
+    { const hg2 = c.createRadialGradient(4, -36, 3, 10, -29, 17);   // 大头
+      hg2.addColorStop(0, col.body); hg2.addColorStop(1, col.body2);
+      c.fillStyle = hg2;
+      c.beginPath(); c.arc(10, -29, 15, 0, TAU); c.fill(); olStroke(); }
+    if(!o.avatar){   // 【角色2.0】照片头像不画眼/吻部
+    c.fillStyle = col.belly;   // 浅色吻部
+    c.beginPath(); c.ellipse(20.5, -22, 6.5, 5.2, 0.12, 0, TAU); c.fill();
+    eye(9.5, -28, 1.2);
     c.fillStyle = '#1f6b52';   // 鼻孔
-    c.beginPath(); c.arc(20, -19, 1.5, 0, TAU); c.fill();
+    c.beginPath(); c.arc(23.8, -23.5, 1.5, 0, TAU); c.fill();
+    }
   } else if(ch.kind === 'cat'){
-    // —— 猫：竖直三角耳 + 上翘细尾 + 胡须，灵动版狐狸 ——
+    // —— 猫 2.0：大头竖耳 + 白吻胡须 + 上翘细尾 ——
+    const OL = 'rgba(90,55,10,0.45)';
+    const olStroke = () => { c.strokeStyle = OL; c.lineWidth = 2; c.stroke(); };
     c.save();   // 细长往上翘的尾巴
-    c.translate(-19, -12);
+    c.translate(-18, -13);
     c.rotate(-0.15 - wag * 0.5 + (o.gliding ? 0.4 : 0));
     c.strokeStyle = col.tail; c.lineWidth = 7; c.lineCap = 'round';
-    c.beginPath(); c.moveTo(0, 2); c.quadraticCurveTo(-18, 0, -20, -16); c.stroke();
+    c.beginPath(); c.moveTo(0, 2); c.quadraticCurveTo(-16, 0, -18, -15); c.stroke();
     c.fillStyle = col.dark;   // 尾尖一圈
-    c.beginPath(); c.arc(-20, -16, 3.5, 0, TAU); c.fill();
+    c.beginPath(); c.arc(-18, -15, 3.5, 0, TAU); c.fill();
     c.restore();
-    scarfTails();
+    scarfTails(-5, -28.5);
     legs();
-    body(14);
-    scarfKnot();
-    belly();
-    c.fillStyle = col.body;   // 竖直三角猫耳（比狐狸更直、更靠近）
-    tri(5, -34, 7, -47, 13, -34);
-    tri(13, -34, 19, -47, 21, -34);
+    { const bg2 = c.createLinearGradient(0, -27, 0, -6);
+      bg2.addColorStop(0, col.body); bg2.addColorStop(1, col.body2);
+      c.fillStyle = bg2; crr(-19, -27, 34, 21, 11); c.fill(); olStroke(); }
+    c.fillStyle = col.belly;
+    c.beginPath(); c.ellipse(5, -13.5, 9, 6, -0.08, 0, TAU); c.fill();
+    c.fillStyle = col.scarf;
+    c.beginPath(); c.arc(-7, -27.5, 4.5, 0, TAU); c.fill(); olStroke();
+    const eA = (o.earA || 0) + idleEar;
+    c.save(); c.translate(3.5, -40); c.rotate(eA);   // 竖直的前猫耳（比狐狸窄且高）
+    c.fillStyle = col.body;
+    c.beginPath(); c.moveTo(-5.5, 3); c.quadraticCurveTo(-5, -9, -0.5, -14.5); c.quadraticCurveTo(4, -9, 5, 3); c.closePath();
+    c.fill(); olStroke();
     c.fillStyle = col.ear || col.dark;
-    tri(7.6, -35, 8.8, -43, 11.4, -35);
-    tri(14.6, -35, 17, -43, 18.4, -35);
-    eye(12, -24);
+    c.beginPath(); c.moveTo(-3, 1.5); c.quadraticCurveTo(-2.5, -5.5, -0.5, -10); c.quadraticCurveTo(1.5, -5.5, 2.2, 1.5); c.closePath(); c.fill();
+    c.restore();
+    c.save(); c.translate(17, -39); c.rotate(eA * 1.25);   // 后耳
+    c.fillStyle = col.body;
+    c.beginPath(); c.moveTo(-5, 3); c.quadraticCurveTo(-4.5, -8, -0.5, -13); c.quadraticCurveTo(3.5, -8, 4.5, 3); c.closePath();
+    c.fill(); olStroke();
+    c.fillStyle = col.ear || col.dark;
+    c.beginPath(); c.moveTo(-2.6, 1.5); c.quadraticCurveTo(-2.2, -5, -0.5, -9); c.quadraticCurveTo(1.3, -5, 2, 1.5); c.closePath(); c.fill();
+    c.restore();
+    { const hg2 = c.createRadialGradient(4, -36, 3, 10, -29, 17);   // 大头
+      hg2.addColorStop(0, col.body); hg2.addColorStop(1, col.body2);
+      c.fillStyle = hg2;
+      c.beginPath(); c.arc(10, -29, 15, 0, TAU); c.fill(); olStroke(); }
+    c.fillStyle = col.body2;   // 后脑勺颊毛
+    tri(-4.5, -33, -11, -35.5, -3.5, -28.5);
+    tri(-5, -26.5, -12, -26, -3.5, -21.5);
+    if(!o.avatar){   // 【角色2.0】照片头像不画眼/白吻/胡须
+    c.fillStyle = col.belly;   // 白吻
+    c.beginPath(); c.ellipse(19, -21.5, 7, 5.6, 0.12, 0, TAU); c.fill();
+    if(!o.dead){
+      c.fillStyle = 'rgba(255,110,130,0.20)';
+      c.beginPath(); c.arc(4, -20.5, 3, 0, TAU); c.fill();
+    }
+    eye(9.5, -28, 1.25);
     c.fillStyle = '#ff8aa0';   // 粉色小三角鼻
-    c.beginPath(); c.moveTo(19.5, -19); c.lineTo(23, -19); c.lineTo(21.3, -16.3); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(22.6, -24.6); c.lineTo(26, -24.6); c.lineTo(24.3, -22); c.closePath(); c.fill();
     c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 1.2; c.lineCap = 'round';   // 胡须
     c.beginPath();
-    c.moveTo(22, -18); c.lineTo(32, -20);
-    c.moveTo(22, -16); c.lineTo(32, -15);
+    c.moveTo(25, -21.5); c.lineTo(34, -23.5);
+    c.moveTo(25, -19.5); c.lineTo(34, -18);
     c.stroke();
+    }
   }
 
   // —— 真人头像模式：把照片裁成圆形"贴纸"盖在头上，表情画在照片周围 ——
   if(o.avatar){
-    const hx = 11, hy = -31, hr = 15;
+    const hx = 10, hy = -29, hr = 16;   // 【角色2.0】贴纸跟新头圆心走，加大盖住头描边
     c.save();
     c.beginPath(); c.arc(hx, hy, hr, 0, TAU); c.clip();
     c.drawImage(o.avatar, hx - hr, hy - hr, hr * 2, hr * 2);
